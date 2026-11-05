@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from findobject.data.dataset import Sample
 from findobject.models.baseline import HEATMAP_PRIOR, BaselineCNN
-from findobject.training.checkpoint import load_model, save_checkpoint
+from findobject.training.checkpoint import load_checkpoint_info, load_model, save_checkpoint
 from findobject.training.config import TrainConfig
 from findobject.training.epoch import train_one_epoch
 
@@ -82,6 +82,16 @@ def test_checkpoint_round_trip_reproduces_outputs(tmp_path):
     reloaded = load_model(path, torch.device("cpu"))
     assert torch.equal(model(x).heatmap_logits, reloaded(x).heatmap_logits)
     assert not reloaded.training
+
+
+def test_checkpoint_info_returns_what_was_saved(tmp_path):
+    model = BaselineCNN()
+    optimizer, scheduler = _opt(model)
+    path = tmp_path / "last.pt"
+    save_checkpoint(path, model, optimizer, scheduler, epoch=7, config={"train": {"lr": 0.001}},
+                    metrics={"joint_acc": 0.25})
+    info = load_checkpoint_info(path)
+    assert (info.epoch, info.config, info.metrics) == (7, {"train": {"lr": 0.001}}, {"joint_acc": 0.25})
 
 
 def test_load_missing_checkpoint_raises(tmp_path):
