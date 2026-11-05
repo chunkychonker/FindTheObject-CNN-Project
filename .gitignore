@@ -1,0 +1,31 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+venv/
+.env
+
+# data + outputs
+# anchored to the repo root: a bare "data/" also matched src/findobject/data/
+/data/
+/outputs/
+
+# editor
+.vscode/
+.idea/
+.DS_Store
+
+# notebooks (optional)
+.ipynb_checkpoints/
+
+# pytorch
+*.pt
+*.pth
+*.ckpt
+
+# logs
+runs/
+*.log
