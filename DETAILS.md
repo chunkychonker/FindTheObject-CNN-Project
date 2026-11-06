@@ -30,6 +30,67 @@ Key CNN ideas this project practices:
 	•	(Optional) ResNet-style skip connections as an upgrade to the baseline CNN
 
 
+
+
+FILE DETAILS: 
+
+
+Top level
+	•	README.md: project pitch, setup, commands to run, results table, demo gif
+	•	requirements.txt / environment.yml: pick one (I’d keep environment.yml if you like conda)
+	•	.gitignore: keep large/generated stuff out of git
+	•	LICENSE: MIT is fine unless you need something else
+
+src/findobject/ (all real code lives here)
+	•	data/: dataset code
+	•	dataset class (PyTorch Dataset)
+	•	transforms/augmentations
+	•	label/target creation (heatmap generation + optional bbox)
+	•	models/:
+	•	baseline CNN
+	•	ResNet-ish variant
+	•	head that outputs heatmap (+ optional class logits)
+	•	training/:
+	•	train loop, loss functions, metrics
+	•	checkpoint saving/loading
+	•	eval/:
+	•	evaluation script helpers (mAP-ish for localization, IoU, center error, etc.)
+	•	viz/:
+	•	overlay predicted heatmap on image
+	•	save example grids for the README
+	•	utils/:
+	•	config loading, seeding, logging, device utils
+
+scripts/ (thin CLI wrappers)
+	•	make_dataset.py: generate synthetic scenes (paste sign crops onto random backgrounds)
+	•	train.py: train model from a config
+	•	evaluate.py: run metrics + write a results JSON/CSV
+	•	infer.py: load checkpoint and run a few images for demo
+
+configs/
+
+Keep your experiment knobs in YAML:
+	•	dataset params (image size, paste scale range, clutter, blur, color jitter)
+	•	model choice (baseline vs resnet)
+	•	training hyperparams (lr, batch size, epochs)
+	•	loss weights (classification loss vs heatmap loss)
+
+data/ (NOT tracked by git)
+	•	raw/: original downloads (GTSRB, backgrounds dataset)
+	•	interim/: extracted crops, cached metadata
+	•	processed/: your generated synthetic dataset (images + labels)
+	•	external/: optional extra datasets
+
+outputs/ (NOT tracked by git)
+	•	runs/: logs (TensorBoard/CSV)
+	•	checkpoints/: model weights
+	•	figures/: plots/visualizations for README/report
+
+demo/
+	•	a tiny script/app later (e.g., streamlit) + sample images
+
+tests/
+	•	at least one “smoke test” that imports your package + runs a forward pass
 Evaluation:
   Classification
 	  •	Accuracy
