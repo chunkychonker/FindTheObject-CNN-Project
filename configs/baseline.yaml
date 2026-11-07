@@ -18,6 +18,9 @@ data:
     noise_max_std: 8.0
     heatmap_sigma: 1.0
 
+model:
+  arch: baseline             # baseline | peak (models/factory.py)
+
 train:
   run_name: baseline
   epochs: 20
