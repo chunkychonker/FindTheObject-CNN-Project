@@ -1,8 +1,11 @@
-"""CLI: train BaselineCNN on data/processed/train.npz, validating on val.npz every epoch.
+"""CLI: train the config's model.arch on data/processed/train.npz, validating on val.npz every epoch.
 
 Usage:
     python scripts/train.py --config configs/baseline.yaml              # full run
+    python scripts/train.py --config configs/peak.yaml                  # full run, class read at the peak
     python scripts/train.py --config configs/baseline.yaml --overfit 32  # sanity check, ~1 min
+
+Raises KeyError if the config has no model.arch, ValueError if it names an unknown architecture.
 
 Full run writes TensorBoard logs to outputs/runs/<run_id>/ and last.pt / best.pt (by val joint
 accuracy) to outputs/checkpoints/<run_id>/, where run_id = <run_name>-<timestamp>. Never touches
@@ -21,6 +24,7 @@ from pathlib import Path
 
 import torch
 import yaml
+from torch import nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, default_collate
@@ -28,7 +32,7 @@ from torch.utils.data import DataLoader, default_collate
 from findobject.data.dataset import Sample, SignScenes
 from findobject.data.gtsrb import NUM_CLASSES
 from findobject.eval.evaluate import evaluate
-from findobject.models.baseline import BaselineCNN
+from findobject.models.factory import Arch, build_model
 from findobject.training.checkpoint import save_checkpoint
 from findobject.training.config import TrainConfig
 from findobject.training.epoch import train_one_epoch
@@ -52,25 +56,26 @@ def main() -> None:
 
     raw_cfg = yaml.safe_load(args.config.read_text())
     cfg = TrainConfig(**raw_cfg["train"])
+    arch = Arch(raw_cfg["model"]["arch"])
     processed = Path(raw_cfg["data"]["processed_dir"])
     device = pick_device(cfg.device)
     shuffle_gen = seed_everything(cfg.seed)
     train_ds = SignScenes(processed / "train.npz")
-    print(f"device {device}, {len(train_ds)} train scenes")
+    print(f"device {device}, model {arch.value}, {len(train_ds)} train scenes")
 
     if args.overfit:
-        sys.exit(0 if overfit(train_ds, args.overfit, cfg, device) else 1)
+        sys.exit(0 if overfit(arch, train_ds, args.overfit, cfg, device) else 1)
     val_ds = SignScenes(processed / "val.npz")
-    train(cfg, raw_cfg, train_ds, val_ds, device, shuffle_gen)
+    train(arch, cfg, raw_cfg, train_ds, val_ds, device, shuffle_gen)
 
 
-def train(cfg: TrainConfig, raw_cfg: dict, train_ds: SignScenes, val_ds: SignScenes,
+def train(arch: Arch, cfg: TrainConfig, raw_cfg: dict, train_ds: SignScenes, val_ds: SignScenes,
           device: torch.device, shuffle_gen: torch.Generator) -> None:
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True, generator=shuffle_gen, num_workers=0)
     val_loader = DataLoader(val_ds, batch_size=VAL_BATCH_SIZE, num_workers=0)
     panels = default_collate([val_ds[i] for i in range(PANEL_COUNT)])
 
-    model = BaselineCNN().to(device)
+    model = build_model(arch).to(device)
     optimizer = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs * len(train_loader))  # per-step decay to 0
 
@@ -127,16 +132,16 @@ def train(cfg: TrainConfig, raw_cfg: dict, train_ds: SignScenes, val_ds: SignSce
 
 
 @torch.no_grad()
-def _log_panels(tb: TBLogger, model: BaselineCNN, panels: Sample, device: torch.device, epoch: int) -> None:
+def _log_panels(tb: TBLogger, model: nn.Module, panels: Sample, device: torch.device, epoch: int) -> None:
     model.eval()
     out = model(panels.image.to(device))
     tb.heatmap_panels("val/heatmaps", panels.image, torch.sigmoid(out.heatmap_logits).cpu(), epoch,
                       gt_heatmaps=panels.heatmap, boxes=panels.box)
 
 
-def overfit(train_ds: SignScenes, n: int, cfg: TrainConfig, device: torch.device) -> bool:
+def overfit(arch: Arch, train_ds: SignScenes, n: int, cfg: TrainConfig, device: torch.device) -> bool:
     batch: Sample = default_collate([train_ds[i] for i in range(n)]).to(device)
-    model = BaselineCNN().to(device)
+    model = build_model(arch).to(device)
     optimizer = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     for step in range(1, OVERFIT_STEPS + 1):
         model.train()
