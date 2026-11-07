@@ -10,6 +10,7 @@ Scored once on a held-out test set of 5,000 synthetic scenes. Full write-up, set
 
 | Version | Test joint acc | Class acc | Pointing acc | Median center error |
 |---|---|---|---|---|
-| v1 baseline | **94.2%** | 94.2% | 99.7% | 1.58 px |
+| v1.5 classify at the heatmap peak | **95.9%** | 95.9% | 99.6% | 1.58 px |
+| v1 baseline | 94.2% | 94.2% | 99.7% | 1.58 px |
 
 *Joint* = the heatmap's peak lands inside the sign **and** the class is right.
