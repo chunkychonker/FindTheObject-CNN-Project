@@ -9,7 +9,7 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
-from findobject.models.baseline import BaselineCNN
+from findobject.models.factory import Arch, build_model
 
 
 class CheckpointInfo(NamedTuple):
@@ -47,13 +47,21 @@ def save_checkpoint(
     os.replace(tmp, path)
 
 
-def load_model(path: Path, device: torch.device) -> BaselineCNN:
-    """Rebuild a BaselineCNN from a checkpoint, in eval mode on `device`.
+def load_model(path: Path, device: torch.device) -> nn.Module:
+    """Rebuild the model a checkpoint was trained as, in eval mode on `device`.
 
-    Raises FileNotFoundError if missing; RuntimeError if the weights don't fit the architecture.
+    The architecture comes from the stored config's model.arch. A config with no "model" section
+    means Arch.BASELINE: every v1 checkpoint was saved before that section existed.
+
+    Raises FileNotFoundError if missing; ValueError if model.arch names no known architecture;
+    RuntimeError if the weights don't fit the architecture.
     """
     ckpt = torch.load(path, map_location=device, weights_only=True)
-    model = BaselineCNN()
+    config = ckpt["config"]
+    # BaselineCNN and PeakCNN have identical weight shapes, so load_state_dict cannot catch a wrong
+    # architecture: it must come from the config.
+    arch = Arch(config["model"]["arch"]) if "model" in config else Arch.BASELINE
+    model = build_model(arch)
     model.load_state_dict(ckpt["model"])
     return model.to(device).eval()
 
