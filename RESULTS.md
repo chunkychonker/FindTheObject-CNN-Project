@@ -11,7 +11,26 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
-## v1.5b: fresh, augmented training scenes (in progress)
+## v1.5b: fresh, augmented training scenes — 2026-11-08
+
+### Headline
+
+Same val and test data as v1 and v1.5 (identical SHA-256), so the rows are directly comparable.
+
+| Split | Model | Joint acc | Class acc | Pointing acc | Center error (median / mean) |
+|---|---|---|---|---|---|
+| **Test** | **v1.5b (run B)** | **97.78%** | 97.78% | 99.78% | 1.58 px / 1.82 px |
+| Test | v1.5 | 95.88% | 95.94% | 99.56% | 1.58 px / 1.88 px |
+| Val | v1.5b (run B) | 98.46% | 98.48% | 99.90% | 1.58 px / 1.79 px |
+| Val | run A (fresh, no augmentation) | 98.32% | 98.34% | 99.92% | 1.58 px / 1.72 px |
+| Val | v1.5 | 97.30% | 97.32% | 99.90% | 1.58 px / 1.71 px |
+
+Test errors fell from 206 to 111 (46% fewer); val errors from 135 to 77 (43% fewer). Run A was not scored
+on test (only the adopted checkpoint is).
+
+**The gain comes from fresh scenes; augmentation's extra effect is unproven.** Most of the improvement is
+already in run A. B's lead over A is small and could be noise (see below). B was adopted because the rule
+written before training said "the better of A and B by val joint", and B is better by that measure.
 
 ### Why
 
@@ -52,6 +71,96 @@ Training data only; model, optimizer, schedule, seed, val and test are untouched
 Decision rule: adopt the better of A and B (by val joint) only if its val joint is ≥ 97.80% (v1.5 + 0.5
 points, about twice the sampling noise of the 5,000-scene val set). Only an adopted checkpoint is scored on
 test, once. Otherwise this entry records a negative result and v1.5 stays the headline.
+
+### Setup (differences from v1.5 only)
+
+| | |
+|---|---|
+| Training data | 20,000 scenes generated on the fly each epoch (`data.train_scenes: fresh`), scene *i* of epoch *e* seeded by (0, *e*, *i*); 4 loader worker processes. B adds `data.train_augment` (above) |
+| Training time | ~40 min per run on MPS (v1.5: ~34); epochs 108–138 s vs ~100 s |
+| Checkpoints | B: `best.pt` from `peak_fresh_aug-20261108-024220`, epoch 19 of 20. A: `best.pt` from `peak_fresh-20261108-032133`, epoch 19 of 20 |
+| Configs | `configs/peak_fresh_aug.yaml` (B), `configs/peak_fresh.yaml` (A) |
+| Code | commit `6403e61` |
+
+### Predictions vs. outcome
+
+| Prediction | v1.5 | A | B | Held? |
+|---|---|---|---|---|
+| A: val joint > 97.30% | 97.30% | 98.32% | | yes |
+| A: sign gap stays ~1.1 pts | 1.10 | 1.28 | | yes (roughly; within probe noise) |
+| B: val joint > A's | | 98.32% | 98.46% | yes, but not significant (p = 0.49) |
+| B: sign gap < 1.0 pt | 1.10 | | 1.02 | **no** (barely) |
+| B: weak-class val acc > 95.30% | 95.30% | 97.93% | 96.99% | yes, but A is higher still |
+| Training class acc < 100% every epoch | 100% by epoch 9 | max 99.5% | max 93.6% | yes |
+| Best val joint ≥ 97.80% | | | 98.46% | yes → **B adopted** |
+
+### What the numbers say
+
+**Fresh scenes removed scene memorization.** Scene by scene on val (exact McNemar tests):
+
+| Comparison | Errors fixed | New errors | p |
+|---|---|---|---|
+| v1.5 → A | 76 | 25 | 3.7×10⁻⁷ |
+| v1.5 → B | 92 | 34 | 2.4×10⁻⁷ |
+| A → B | 41 | 34 | 0.49 |
+
+Run A's accuracy on its own training scenes (99.5% in the last epoch) now matches its accuracy on new
+scenes with training signs (99.60%), so the 1.60-point scene-memorization gap v1.5 had is gone.
+These tests cover val sampling noise only; there is still one training run per model.
+
+**Sign memorization did not shrink measurably.** The probe's sign gap (new scenes with training signs vs.
+val) is 1.10 pts for v1.5, 1.28 for A, 1.02 for B. On 5,000 scenes per side, the gap carries roughly ±0.3
+points of sampling noise, so all three are about the same. Augmentation at these strengths does not make the
+model treat a training sign as unfamiliar enough to stop memorizing it. Closing that gap probably needs
+more distinct physical signs (GTSRB has 6–12 tracks for the weakest classes) or stronger augmentation.
+
+**Weak classes improved, but from fresh scenes, not augmentation.** Class accuracy on val for the 15
+classes with ≤ 12 training tracks: v1.5 95.30%, A 97.93%, B 96.99%. That A-vs-B difference is not tested.
+
+**Test improved more than val** (+1.90 pts vs. +1.16). The cause is unknown. Test signs come from
+GTSRB's separately recorded test set, so more varied training scenes may transfer better to it, but this
+was not tested. Test was scored once, for B only.
+
+**Weakest classes on test** (accuracy, v1.5 for comparison, number of test scenes):
+
+| Class | v1.5b | v1.5 | n |
+|---|---|---|---|
+| 21 double curve | 76.2% | 57.1% | 42 |
+| 42 end no passing (trucks) | 79.4% | 91.2% | 34 |
+| 22 bumpy road | 87.3% | 78.2% | 55 |
+| 30 ice/snow | 89.7% | 89.7% | 68 |
+
+4 of 43 classes are below 90% (v1.5: 4); 15 are at 100% (v1.5: 5). Pedestrians, v1's worst class at 38.5%,
+is now 92.3%. End no passing (trucks) got worse, mostly confused with end no passing (5 scenes; v1.5: 0).
+
+**Most frequent confusions on test** (true → predicted, of 111 class errors):
+
+| True | Predicted | v1.5b | v1.5 |
+|---|---|---|---|
+| 5 speed 80 | 2 speed 50 | 9 | 5 |
+| 22 bumpy road | 25 road work | 6 | 6 |
+| 3 speed 60 | 5 speed 80 | 6 | 11 |
+| 42 end no passing (trucks) | 41 end no passing | 5 | 0 |
+
+**Val quirk, class 34 (turn left ahead):** 51.2% for v1.5, 88.4% for B (79.1% for A). The hard val track
+is not unlearnable after all; it benefits from more varied training scenes.
+
+### Known limits of v1.5b
+
+- **One training run per model.** Seed-to-seed variance is unmeasured, so the A-vs-B ranking could flip
+  with another seed.
+- **Sign memorization remains** (~1 pt gap; see above).
+- **Training is a bit slower** (~40 vs ~34 min) and now depends on the raw GTSRB/COCO files at training
+  time, not only on `train.npz`.
+- **The augmentation can stack into very dark signs**: contrast 0.6 on an already-dark sign at brightness
+  0.6. Not filtered; dark signs were already the largest error group in v1.5.
+- Everything listed under v1.5's and v1's known limits still applies.
+
+### Raw results
+
+- `results/v1.5b-fresh-aug/best_test.json`, `best_val.json`, `best_probe.json` (run B)
+- `results/v1.5b-fresh/best_val.json`, `best_probe.json` (run A)
+- `results/v1.5-peak/best_probe.json` (the v1.5 probe baseline above)
 
 ---
 
