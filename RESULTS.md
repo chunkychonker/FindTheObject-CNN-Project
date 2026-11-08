@@ -11,7 +11,7 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
-## v1.6: seed variance of v1.5b (in progress)
+## v1.6: seed variance of v1.5b — 2026-11-08
 
 ### Why
 
@@ -38,6 +38,55 @@ splits and the val/test files are unchanged.
 | The sign gap stays at 0.7–1.3 pts in every seed | probe |
 
 If a seed falls below 97.80% on val, the v1.5b headline gets a caveat that its gain depends on the seed.
+
+### Results
+
+Seed 0 is run B from v1.5b (`peak_fresh_aug-20261108-024220`); seeds 1 and 2 are
+`peak_fresh_aug_s1-20261108-062248` and `peak_fresh_aug_s2-20261108-071534`. Every number below comes from
+the JSONs in `results/v1.5b-fresh-aug/`, `results/v1.6-seed1/` and `results/v1.6-seed2/`. Each test split was
+scored once.
+
+| Seed | Best epoch | Val joint | Test joint (errors / 5,000) | Probe: fresh training signs | Sign gap | Weak-class val acc |
+|---|---|---|---|---|---|---|
+| 0 (headline) | 19 | 98.46% | 97.78% (111) | 99.48% | 1.02 pts | 96.99% |
+| 1 | 16 | 98.32% | 97.50% (125) | 99.02% | 0.70 pts | 96.62% |
+| 2 | 18 | 98.42% | 97.50% (125) | 99.02% | 0.60 pts | 97.18% |
+| **Mean ± sd** | | **98.40 ± 0.07%** | **97.59 ± 0.16%** | 99.17 ± 0.27% | 0.77 ± 0.22 pts | 96.93 ± 0.29% |
+
+(sd = sample standard deviation over 3 runs, so it is itself a rough estimate.)
+
+| Prediction | Result | Held? |
+|---|---|---|
+| Seeds 1, 2 within ±0.3 pts of 98.46% val | −0.14, −0.04 pts | yes |
+| All seeds ≥ 97.80% val | lowest is 98.32% | yes → no caveat needed |
+| Seeds 1, 2 within ±0.5 pts of 97.78% test | −0.28, −0.28 pts | yes |
+| Sign gap 0.7–1.3 pts in every seed | 1.02, 0.70, 0.60 | **no**: seed 2 is below the range |
+
+### What it means
+
+- **v1.5b's gain over v1.5 is not a lucky seed.** The worst seed (98.32% val, 97.50% test) still beats
+  v1.5 (97.30% val, 95.88% test) by a full point on val and 1.6 points on test.
+- **The headline is the luckiest of the three seeds on test.** The 3-seed mean is 97.6%, about 0.2 pts below
+  the 97.8% headline. The headline stays seed 0 (that was decided before training), but the README now
+  shows the mean next to it. The 14-scene difference (111 vs 125 errors) is about the size of the sampling
+  noise (±0.24 pts), so seed 0 is not clearly a better model, only a higher draw.
+- **Augmentation's edge over plain fresh scenes (v1.5b A vs B) disappears into seed noise.** A scored 98.32%
+  val; B's three seeds span 98.32–98.46%, and seed 1 ties A exactly. That fits the McNemar result in v1.5b
+  (p = 0.49): choosing B over A was effectively a coin flip. B is kept because the decision rule picked it,
+  and it is no worse.
+- **The sign gap is smaller than one run suggested.** The prediction failed because seed 0 fit its training
+  signs unusually well (99.48% vs 99.02% on fresh training-sign scenes) while val accuracy barely moved.
+  Across seeds the gap is 0.77 ± 0.22 pts: some memorization of the physical signs remains, but about
+  0.6–1.0 pts, not the ~1 pt the single run showed.
+- Hardest classes stay the same across seeds: 21 (double curve) is the worst test class in seeds 1 and 2
+  (71% and 64%, n = 42), with 42 and 32 next in both. All three are weak (≤ 12 track) classes, so more
+  distinct physical signs (or real-photo data in v2), not more training, is the likely fix.
+
+### Not covered
+
+- 3 seeds give a rough spread, not a confidence interval; a sd of 0.07 from 3 runs could easily be 0.15.
+- Only v1.5b was re-seeded. v1 and v1.5 are still single runs, so their numbers carry the same
+  ±0.2-ish seed uncertainty (the gaps between versions are much larger than that).
 
 ---
 
