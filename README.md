@@ -16,6 +16,9 @@ Scored once on a held-out test set of 5,000 synthetic scenes. Full write-up, set
 
 *Joint* = the heatmap's peak lands inside the sign **and** the class is right.
 
+v1.5b retrained with 3 seeds scores **97.6% ± 0.2** test joint (range 97.5–97.8%). The table shows seed 0,
+the headline chosen before training (see v1.6 in RESULTS.md).
+
 ## What the model sees
 
 Random validation scenes from v1.5: eight it gets right (top) and four it gets wrong (bottom row, true class in
