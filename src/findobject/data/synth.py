@@ -4,10 +4,13 @@ No file I/O here. Callers pass in already-loaded PIL images and a seeded RNG, so
 same (inputs, rng state) always produce the same Scene.
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
+
+from findobject.data.sign_augment import SignAugment, augment_sign
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,7 @@ class SynthConfig:
     blur_max_radius: float = 1.0  # Gaussian blur radius (px) on the whole scene
     noise_max_std: float = 8.0  # per-pixel Gaussian noise std (0-255 scale) on the whole scene
     heatmap_sigma: float = 1.0  # in heatmap cells
+    sign_augment: SignAugment = SignAugment()  # train-only extras; the default is off (val/test unchanged)
 
     def __post_init__(self) -> None:
         if self.scene_size % self.heatmap_size != 0:
@@ -72,8 +76,10 @@ def gaussian_heatmap(center_xy: tuple[float, float], size: int, sigma: float) ->
 def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Scene:
     """Paste `sign` at a random scale/position onto a random square crop of `bg`.
 
-    Augmentation: brightness on the sign; optional blur and Gaussian noise on the whole scene.
-    Does not mutate the input images. Raises whatever PIL raises on unreadable image data.
+    Augmentation: brightness on the sign; optional blur and Gaussian noise on the whole scene; and,
+    only if cfg.sign_augment is not the identity, recolor/rotate/warp/occlusion of the sign
+    (see sign_augment.py). With the identity default, output is exactly what it was before
+    sign_augment existed. Does not mutate the input images. Raises whatever PIL raises on unreadable image data.
     """
     s = cfg.scene_size
     canvas = _random_square_crop(bg.convert("RGB"), rng).resize((s, s), Image.BILINEAR)
@@ -86,9 +92,15 @@ def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg
     sign = sign.resize((w, h), Image.BILINEAR)
     sign = ImageEnhance.Brightness(sign).enhance(rng.uniform(*cfg.brightness))
 
-    x1 = int(rng.integers(0, s - w + 1))
-    y1 = int(rng.integers(0, s - h + 1))
-    canvas.paste(sign, (x1, y1))
+    if cfg.sign_augment.is_identity:
+        # The original path, untouched: it must draw from rng in exactly the same order so that
+        # regenerating v1/v1.5 data stays byte-identical.
+        x1 = int(rng.integers(0, s - w + 1))
+        y1 = int(rng.integers(0, s - h + 1))
+        canvas.paste(sign, (x1, y1))
+        box = (x1, y1, x1 + w, y1 + h)
+    else:
+        box = _paste_augmented(canvas, sign, rng, cfg.sign_augment)
 
     if rng.random() < cfg.blur_prob:
         canvas = canvas.filter(ImageFilter.GaussianBlur(rng.uniform(0, cfg.blur_max_radius)))
@@ -99,10 +111,56 @@ def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg
 
     # Heatmap cell c covers scene pixels [c*stride, (c+1)*stride), centered at (c + 0.5)*stride.
     stride = s / cfg.heatmap_size
-    center = ((x1 + w / 2) / stride - 0.5, (y1 + h / 2) / stride - 0.5)
+    bx1, by1, bx2, by2 = box
+    center = ((bx1 + bx2) / 2 / stride - 0.5, (by1 + by2) / 2 / stride - 0.5)
     heatmap = gaussian_heatmap(center, cfg.heatmap_size, cfg.heatmap_sigma)
 
-    return Scene(image=image, box=(x1, y1, x1 + w, y1 + h), heatmap=heatmap)
+    return Scene(image=image, box=box, heatmap=heatmap)
+
+
+def _paste_augmented(
+    canvas: Image.Image, sign: Image.Image, rng: np.random.Generator, aug: SignAugment
+) -> tuple[int, int, int, int]:
+    """Warp `sign`, paste it through its mask at a random position, maybe occlude it with a patch
+    of the same background. Mutates canvas. Returns the box: the tight bounds of every pixel the
+    sign touches (mask > 0), x2/y2 exclusive. Occlusion does not shrink the box: the sign is still there.
+    """
+    s = canvas.width
+    rgb, mask = augment_sign(sign, rng, aug)
+    w, h = rgb.size
+    if w > s or h > s:  # only possible with extreme settings; shrink back to fit
+        fit = s / max(w, h)
+        size = (max(1, int(w * fit)), max(1, int(h * fit)))
+        rgb, mask = rgb.resize(size, Image.BILINEAR), mask.resize(size, Image.BILINEAR)
+        w, h = size
+    x1 = int(rng.integers(0, s - w + 1))
+    y1 = int(rng.integers(0, s - h + 1))
+    background = canvas.copy()
+    canvas.paste(rgb, (x1, y1), mask)
+    mx1, my1, mx2, my2 = mask.getbbox()  # bounds of mask > 0, right/bottom exclusive
+    box = (x1 + mx1, y1 + my1, x1 + mx2, y1 + my2)
+    if rng.random() < aug.occlusion_prob:
+        _occlude(canvas, background, box, rng, aug.occlusion_area)
+    return box
+
+
+def _occlude(
+    canvas: Image.Image, background: Image.Image, box: tuple[int, int, int, int],
+    rng: np.random.Generator, area_range: tuple[float, float],
+) -> None:
+    """Paste a rectangle cut from elsewhere in `background` over part of `box`, like a branch or a
+    car in front of the sign. Area is a fraction of the box drawn from area_range; aspect 1:2 to 2:1."""
+    bx1, by1, bx2, by2 = box
+    bw, bh = bx2 - bx1, by2 - by1
+    area = rng.uniform(*area_range) * bw * bh
+    aspect = math.exp(rng.uniform(math.log(0.5), math.log(2.0)))
+    ow = int(np.clip(round(math.sqrt(area * aspect)), 1, bw))
+    oh = int(np.clip(round(math.sqrt(area / aspect)), 1, bh))
+    ox = bx1 + int(rng.integers(0, bw - ow + 1))
+    oy = by1 + int(rng.integers(0, bh - oh + 1))
+    sx = int(rng.integers(0, canvas.width - ow + 1))
+    sy = int(rng.integers(0, canvas.height - oh + 1))
+    canvas.paste(background.crop((sx, sy, sx + ow, sy + oh)), (ox, oy))
 
 
 def _random_square_crop(img: Image.Image, rng: np.random.Generator) -> Image.Image:
