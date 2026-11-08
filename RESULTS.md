@@ -11,6 +11,50 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
+## v1.5b: fresh, augmented training scenes (in progress)
+
+### Why
+
+v1.5 reaches 100% training class accuracy by epoch 9 while val stays at 97.3%. A probe
+(`scripts/probe_memorization.py`) splits that 2.7-point gap by scoring v1.5 on 5,000 *new* scenes built
+from *training* signs and backgrounds:
+
+| v1.5 on | Joint acc | Gap to the row above |
+|---|---|---|
+| its own training scenes | 100% | |
+| new scenes, training signs | 98.40% | 1.60 pts: scene memorization |
+| val (new scenes, unseen signs) | 97.30% | 1.10 pts: sign memorization |
+
+Weak classes (≤ 12 training tracks; 15 of 43) score 95.30% class accuracy on val.
+
+### What changes
+
+Training data only; model, optimizer, schedule, seed, val and test are untouched (same SHA-256s).
+
+- **Run A** (`configs/peak_fresh.yaml`): 20,000 newly generated scenes every epoch instead of the fixed
+  `train.npz`. Same generator, same signs and backgrounds, so this targets scene memorization only.
+- **Run B** (`configs/peak_fresh_aug.yaml`): A plus per-sign augmentation of the training signs: rotation
+  ±10°, perspective warp (corners move up to 8% of the sign's size), contrast and saturation ×0.6–1.4, and a
+  30% chance a background patch covers 10–25% of the sign. No flips (they swap left/right meanings) and no
+  hue shifts (color carries meaning). This targets sign memorization too.
+
+### Predictions (written before training)
+
+| Prediction | Measure |
+|---|---|
+| A: val joint > 97.30% (v1.5) | val joint |
+| A: sign gap stays about where it was (~1.1 pts), because A shows the same signs the same way | probe: fresh − val joint |
+| B: val joint > A's | val joint |
+| B: sign gap < 1.0 pt | probe |
+| B: weak-class val accuracy > 95.30% | probe |
+| A and B: training class accuracy stays below 100% in every epoch | train_epoch/class_acc |
+
+Decision rule: adopt the better of A and B (by val joint) only if its val joint is ≥ 97.80% (v1.5 + 0.5
+points, about twice the sampling noise of the 5,000-scene val set). Only an adopted checkpoint is scored on
+test, once. Otherwise this entry records a negative result and v1.5 stays the headline.
+
+---
+
 ## v1.5 — classify at the heatmap peak — 2026-11-06
 
 ### Headline
