@@ -37,6 +37,17 @@ def test_config_rejects_bad_values(key, value):
         TrainConfig(**{**VALID, key: value})
 
 
+def test_config_num_workers_defaults_to_zero_and_accepts_positive():
+    assert TrainConfig(**VALID).num_workers == 0
+    assert TrainConfig(**VALID, num_workers=4).num_workers == 4
+
+
+@pytest.mark.parametrize("value", [-1, 1.5, "4"])
+def test_config_rejects_bad_num_workers(value):
+    with pytest.raises(ValueError):
+        TrainConfig(**VALID, num_workers=value)
+
+
 def test_config_rejects_unknown_key():
     with pytest.raises(TypeError):
         TrainConfig(**VALID, epochz=3)

@@ -33,6 +33,11 @@ def center_error_px(pred_heatmaps: torch.Tensor, boxes: torch.Tensor, scene_size
 
 def peak_in_box(pred_heatmaps: torch.Tensor, boxes: torch.Tensor, scene_size: int) -> torch.Tensor:
     """[B] bool: does the predicted peak land inside the true sign box? Mean of this = hit rate."""
-    p = peak_centers(pred_heatmaps, scene_size)
+    return point_in_box(peak_centers(pred_heatmaps, scene_size), boxes)
+
+
+def point_in_box(points: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
+    """[B, 2] (x, y) points, [B, 4] (x1, y1, x2, y2) boxes -> [B] bool, x2/y2 exclusive."""
+    p = points.float()
     b = boxes.float()
     return (p[:, 0] >= b[:, 0]) & (p[:, 0] < b[:, 2]) & (p[:, 1] >= b[:, 1]) & (p[:, 1] < b[:, 3])

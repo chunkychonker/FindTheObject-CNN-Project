@@ -1,4 +1,4 @@
-# FindTheObject-CNN-Project-
+# FindTheObject-CNN-Project
 
 Project plan 
 
