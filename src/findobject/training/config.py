@@ -20,6 +20,7 @@ class TrainConfig:
     device: Literal["auto", "mps", "cpu"]
     log_every_steps: int
     histogram_every_epochs: int
+    num_workers: int = 0  # DataLoader worker processes for training scenes; 0 = load in the main process
 
     def __post_init__(self) -> None:
         if not self.run_name or "/" in self.run_name:
@@ -34,5 +35,7 @@ class TrainConfig:
                 raise ValueError(f"{name} must be a number > 0, got {value!r}")
         if not isinstance(self.weight_decay, (int, float)) or self.weight_decay < 0:
             raise ValueError(f"weight_decay must be a number >= 0, got {self.weight_decay!r}")
+        if not isinstance(self.num_workers, int) or self.num_workers < 0:
+            raise ValueError(f"num_workers must be an int >= 0, got {self.num_workers!r}")
         if self.device not in DEVICES:
             raise ValueError(f"device must be one of {DEVICES}, got {self.device!r}")
