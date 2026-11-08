@@ -1,0 +1,55 @@
+{
+  "fresh_train_signs": {
+    "class_loss": 0.029515664492547514,
+    "heatmap_loss": 10.729120657348632,
+    "heatmap_excess": 0.39884459228515623,
+    "class_acc": 0.9901999831199646,
+    "pointing_acc": 0.9998000264167786,
+    "joint_acc": 0.9901999831199646,
+    "center_err_mean": 1.719306230545044,
+    "center_err_median": 1.5811388492584229
+  },
+  "val": {
+    "class_loss": 0.055942723298072816,
+    "heatmap_loss": 10.835513330078125,
+    "heatmap_excess": 0.5052458770751953,
+    "class_acc": 0.9843999743461609,
+    "pointing_acc": 0.9990000128746033,
+    "joint_acc": 0.9842000007629395,
+    "center_err_mean": 1.7658798694610596,
+    "center_err_median": 1.5811388492584229
+  },
+  "sign_gap_joint": 0.0059999823570251465,
+  "sign_gap_class": 0.005800008773803711,
+  "weak_classes": {
+    "0": 6,
+    "19": 6,
+    "20": 11,
+    "21": 10,
+    "22": 12,
+    "24": 8,
+    "27": 7,
+    "29": 8,
+    "32": 7,
+    "36": 12,
+    "37": 6,
+    "39": 9,
+    "40": 11,
+    "41": 7,
+    "42": 7
+  },
+  "weak_class_acc": {
+    "fresh": 0.9913344979286194,
+    "val": 0.9718044996261597
+  },
+  "n_fresh": 5000,
+  "fresh_seed": 987654,
+  "fresh_epoch": 0,
+  "weak_max_tracks": 12,
+  "checkpoint": "outputs/checkpoints/peak_fresh_aug_s2-20261108-071534/best.pt",
+  "checkpoint_epoch": 18,
+  "run_id": "peak_fresh_aug_s2-20261108-071534",
+  "device": "mps",
+  "torch_version": "2.9.0",
+  "evaluated_at": "2026-11-08T08:01:54"
+}
