@@ -17,8 +17,9 @@ import numpy as np
 import yaml
 from PIL import Image
 
-from findobject.data.coco import list_backgrounds
-from findobject.data.gtsrb import SignSample, load_sign, read_test_index, read_train_index, split_by_track
+from findobject.data.data_config import synth_config
+from findobject.data.gtsrb import SignSample, load_sign
+from findobject.data.splits import split_sources
 from findobject.data.synth import SynthConfig, make_scene
 
 # Seed offset per split, keyed by name so adding a split never changes another split's output.
@@ -59,29 +60,18 @@ def main() -> None:
     args = parser.parse_args()
 
     data_cfg = yaml.safe_load(args.config.read_text())["data"]
-    synth_cfg = data_cfg["synth"]
-    cfg = SynthConfig(**{**synth_cfg, "brightness": tuple(synth_cfg["brightness"])})
-    raw = Path(data_cfg["raw_dir"])
+    cfg = synth_config(data_cfg)  # never data.train_augment: stored splits are unaugmented by design
     out_dir = Path(data_cfg["processed_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    bgs = list_backgrounds(raw / "coco/val2017", raw / "coco/annotations/instances_val2017.json")
-    every = data_cfg["test_background_every"]
-    train_signs, val_signs = split_by_track(
-        read_train_index(raw / "gtsrb"), data_cfg["holdout_fraction"], seed=data_cfg["seed"]
-    )
-    splits = {
-        "train": (train_signs, [b for i, b in enumerate(bgs) if i % every not in (0, 1)], data_cfg["n_train"]),
-        "val": (val_signs, bgs[1::every], data_cfg["n_val"]),
-        "test": (read_test_index(raw / "gtsrb"), bgs[::every], data_cfg["n_test"]),
-    }
-    print(f"{len(bgs)} backgrounds")
-    for name, (signs, split_bgs, n) in splits.items():
+    sources = split_sources(data_cfg)
+    sizes = {"train": data_cfg["n_train"], "val": data_cfg["n_val"], "test": data_cfg["n_test"]}
+    for name, (signs, split_bgs) in sources.items():
+        n = sizes[name]
         print(f"{name}: {n} scenes from {len(signs)} signs, {len(split_bgs)} backgrounds")
         arrays = generate(signs, split_bgs, n, seed=data_cfg["seed"] * 1000 + SPLIT_SEED_OFFSET[name], cfg=cfg)
         save_atomic(out_dir / f"{name}.npz", arrays)
         print(f"  wrote {out_dir / name}.npz")
-
 
 if __name__ == "__main__":
     main()
