@@ -11,6 +11,36 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
+## v1.6: seed variance of v1.5b (in progress)
+
+### Why
+
+Every result so far is one training run per model, so "v1.5b scores 97.78% on test" could partly be a lucky
+or unlucky seed. v1.6 retrains v1.5b twice more, changing nothing but `train.seed` (1 and 2), which sets the
+initial weights, the batch order and the stream of fresh training scenes. `data.seed` stays 0, so the
+splits and the val/test files are unchanged.
+
+### Plan
+
+- Configs `configs/peak_fresh_aug_s1.yaml` and `_s2.yaml`, identical to `configs/peak_fresh_aug.yaml` except
+  `train.seed` and `run_name`.
+- Each new checkpoint (best val epoch, as always) is scored on val, probed, and scored on test once.
+- Report mean and spread over the three seeds. **No selection:** the headline model stays the seed-0 run.
+  Picking the best seed after the fact would turn the seed into a tuned hyperparameter.
+
+### Predictions (written before training)
+
+| Prediction | Measure |
+|---|---|
+| Seeds 1 and 2 land within ±0.3 pts of seed 0's val joint (98.46%) | val joint |
+| All three seeds reach ≥ 97.80% val joint, so v1.5b's gain over v1.5 does not depend on the seed | val joint |
+| Seeds 1 and 2 land within ±0.5 pts of seed 0's test joint (97.78%) | test joint |
+| The sign gap stays at 0.7–1.3 pts in every seed | probe |
+
+If a seed falls below 97.80% on val, the v1.5b headline gets a caveat that its gain depends on the seed.
+
+---
+
 ## v1.5b: fresh, augmented training scenes — 2026-11-08
 
 ### Headline
