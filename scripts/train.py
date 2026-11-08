@@ -1,22 +1,29 @@
-"""CLI: train the config's model.arch on data/processed/train.npz, validating on val.npz every epoch.
+"""CLI: train the config's model.arch on the config's training scenes, validating on val.npz every epoch.
 
 Usage:
     python scripts/train.py --config configs/baseline.yaml              # full run
     python scripts/train.py --config configs/peak.yaml                  # full run, class read at the peak
+    python scripts/train.py --config configs/peak_fresh_aug.yaml        # new scenes every epoch, augmented signs
     python scripts/train.py --config configs/baseline.yaml --overfit 32  # sanity check, ~1 min
 
-Raises KeyError if the config has no model.arch, ValueError if it names an unknown architecture.
+Training scenes come from data.train_scenes: "fixed" (default) reuses train.npz every epoch;
+"fresh" generates data.n_train new scenes per epoch from the train split's signs and backgrounds,
+with data.train_augment applied to the signs (see training/train_data.py).
+
+Raises KeyError if the config has no model.arch, ValueError if it names an unknown architecture,
+an unknown data.train_scenes, or data.train_augment with fixed scenes.
 
 Full run writes TensorBoard logs to outputs/runs/<run_id>/ and last.pt / best.pt (by val joint
 accuracy) to outputs/checkpoints/<run_id>/, where run_id = <run_name>-<timestamp>. Never touches
 test.npz. Not idempotent: each invocation is a new run, and MPS is not bit-for-bit deterministic;
 safe to re-run because it never overwrites an earlier run. No resume: a crashed run restarts.
 
---overfit N trains on the first N train scenes only and exits 0 if the model reaches 100% class
+--overfit N trains on the first N scenes of epoch 1 only and exits 0 if the model reaches 100% class
 and pointing accuracy on them (in eval mode), else 1. Failure means a pipeline bug.
 """
 
 import argparse
+from collections.abc import Callable
 import sys
 import time
 from datetime import datetime
@@ -27,7 +34,7 @@ import yaml
 from torch import nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.utils.data import DataLoader, default_collate
+from torch.utils.data import DataLoader, Dataset, default_collate
 
 from findobject.data.dataset import Sample, SignScenes
 from findobject.data.gtsrb import NUM_CLASSES
@@ -36,6 +43,7 @@ from findobject.models.factory import Arch, build_model
 from findobject.training.checkpoint import save_checkpoint
 from findobject.training.config import TrainConfig
 from findobject.training.epoch import train_one_epoch
+from findobject.training.train_data import epoch_datasets
 from findobject.training.losses import LossParts, detection_loss
 from findobject.utils.device import pick_device
 from findobject.utils.seed import seed_everything
@@ -60,28 +68,36 @@ def main() -> None:
     processed = Path(raw_cfg["data"]["processed_dir"])
     device = pick_device(cfg.device)
     shuffle_gen = seed_everything(cfg.seed)
-    train_ds = SignScenes(processed / "train.npz")
-    print(f"device {device}, model {arch.value}, {len(train_ds)} train scenes")
+    for_epoch = epoch_datasets(raw_cfg["data"], cfg.seed)
+    scenes = raw_cfg["data"].get("train_scenes", "fixed")
+    print(f"device {device}, model {arch.value}, {len(for_epoch(1))} {scenes} train scenes per epoch, "
+          f"{cfg.num_workers} loader workers")
 
     if args.overfit:
-        sys.exit(0 if overfit(arch, train_ds, args.overfit, cfg, device) else 1)
+        sys.exit(0 if overfit(arch, for_epoch(1), args.overfit, cfg, device) else 1)
     val_ds = SignScenes(processed / "val.npz")
-    train(arch, cfg, raw_cfg, train_ds, val_ds, device, shuffle_gen)
+    train(arch, cfg, raw_cfg, for_epoch, val_ds, device, shuffle_gen)
 
 
-def train(arch: Arch, cfg: TrainConfig, raw_cfg: dict, train_ds: SignScenes, val_ds: SignScenes,
-          device: torch.device, shuffle_gen: torch.Generator) -> None:
-    train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True, generator=shuffle_gen, num_workers=0)
+def train(arch: Arch, cfg: TrainConfig, raw_cfg: dict, for_epoch: Callable[[int], Dataset[Sample]],
+          val_ds: SignScenes, device: torch.device, shuffle_gen: torch.Generator) -> None:
+    def train_loader(epoch: int) -> DataLoader:
+        # A new loader per epoch: fresh scenes change every epoch. Shuffle draws continue from the
+        # one shuffle_gen, so fixed-scene runs get the same order as a single reused loader would.
+        return DataLoader(for_epoch(epoch), batch_size=cfg.batch_size, shuffle=True, generator=shuffle_gen,
+                          num_workers=cfg.num_workers)
+
+    steps_per_epoch = len(train_loader(1))  # every epoch has the same scene count
     val_loader = DataLoader(val_ds, batch_size=VAL_BATCH_SIZE, num_workers=0)
     panels = default_collate([val_ds[i] for i in range(PANEL_COUNT)])
 
     model = build_model(arch).to(device)
     optimizer = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs * len(train_loader))  # per-step decay to 0
+    scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs * steps_per_epoch)  # per-step decay to 0
 
     run_id = f"{cfg.run_name}-{datetime.now():%Y%m%d-%H%M%S}"
     ckpt_dir = CHECKPOINTS_ROOT / run_id
-    print(f"run {run_id}: {cfg.epochs} epochs x {len(train_loader)} steps, {len(val_ds)} val scenes")
+    print(f"run {run_id}: {cfg.epochs} epochs x {steps_per_epoch} steps, {len(val_ds)} val scenes")
 
     step = 0
     best_joint = -1.0
@@ -102,7 +118,7 @@ def train(arch: Arch, cfg: TrainConfig, raw_cfg: dict, train_ds: SignScenes, val
 
         for epoch in range(1, cfg.epochs + 1):
             t0 = time.monotonic()
-            stats = train_one_epoch(model, train_loader, optimizer, scheduler, device, cfg.heatmap_loss_weight, on_step)
+            stats = train_one_epoch(model, train_loader(epoch), optimizer, scheduler, device, cfg.heatmap_loss_weight, on_step)
             val = evaluate(model, val_loader, device, cfg.heatmap_loss_weight)
             metrics = val.scalars()
 
@@ -139,7 +155,7 @@ def _log_panels(tb: TBLogger, model: nn.Module, panels: Sample, device: torch.de
                       gt_heatmaps=panels.heatmap, boxes=panels.box)
 
 
-def overfit(arch: Arch, train_ds: SignScenes, n: int, cfg: TrainConfig, device: torch.device) -> bool:
+def overfit(arch: Arch, train_ds: Dataset[Sample], n: int, cfg: TrainConfig, device: torch.device) -> bool:
     batch: Sample = default_collate([train_ds[i] for i in range(n)]).to(device)
     model = build_model(arch).to(device)
     optimizer = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
