@@ -51,7 +51,7 @@ def split_by_track(
         raise ValueError("holdout_fraction must be in (0, 1)")
     tracks_by_class: dict[int, set[str]] = defaultdict(set)
     for s in samples:
-        tracks_by_class[s.class_id].add(_track_id(s))
+        tracks_by_class[s.class_id].add(track_id(s))
     rng = np.random.default_rng(seed)
     held: set[tuple[int, str]] = set()
     for class_id in sorted(tracks_by_class):
@@ -60,12 +60,12 @@ def split_by_track(
             raise ValueError(f"class {class_id} has {len(tracks)} track(s); need >= 2 to split")
         k = max(1, round(holdout_fraction * len(tracks)))
         held.update((class_id, tracks[j]) for j in rng.choice(len(tracks), size=k, replace=False))
-    kept = [s for s in samples if (s.class_id, _track_id(s)) not in held]
-    held_out = [s for s in samples if (s.class_id, _track_id(s)) in held]
+    kept = [s for s in samples if (s.class_id, track_id(s)) not in held]
+    held_out = [s for s in samples if (s.class_id, track_id(s)) in held]
     return kept, held_out
 
 
-def _track_id(sample: SignSample) -> str:
+def track_id(sample: SignSample) -> str:
     return sample.path.name.split("_")[0]
 
 
