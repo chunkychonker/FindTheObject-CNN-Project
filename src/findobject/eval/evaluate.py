@@ -21,9 +21,10 @@ class EvalResult(NamedTuple):
     center_err_median: float
     y_true: Tensor  # int64 [N], cpu
     y_pred: Tensor  # int64 [N], cpu
+    hit: Tensor  # bool [N], cpu: heatmap peak inside the true box, per scene
 
     def scalars(self) -> dict[str, float]:
-        """The float fields only (drops y_true / y_pred)."""
+        """The float fields only (drops the per-scene tensors)."""
         return {k: v for k, v in self._asdict().items() if isinstance(v, float)}
 
 
@@ -66,4 +67,5 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device, heatmap
         center_err_median=err_t.median().item(),
         y_true=y_true_t,
         y_pred=y_pred_t,
+        hit=hit_t,
     )

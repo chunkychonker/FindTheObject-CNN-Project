@@ -40,6 +40,7 @@ def test_metrics_match_hand_counts():
     assert r.center_err_mean == pytest.approx(far / 4)
     assert r.center_err_median == pytest.approx(0.0)
     assert r.y_pred.tolist() == PRED_CLASSES.tolist() and r.y_true.tolist() == CLASSES.tolist()
+    assert r.hit.tolist() == [True, True, True, False]
     assert set(r.scalars()) == {"class_loss", "heatmap_loss", "heatmap_excess", "class_acc", "pointing_acc",
                                 "joint_acc", "center_err_mean", "center_err_median"}
 
