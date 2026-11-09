@@ -56,6 +56,128 @@ the heatmap's peak height. Full spec: [docs/v3a-spec.md](docs/v3a-spec.md) (draf
 
 "Found" means said yes, *and* peak inside the sign's box, *and* class right.
 
+### Dev results (written before test or real_test was scored)
+
+**Read this first:** "presence" asks only whether the model thinks a 128×128 window holds a sign. Real
+negatives are windows that touch no *labeled* GTSDB sign, and some of them hold signs GTSDB does not
+label (see P6).
+
+Seed 0 for each model. Brackets are 95% intervals. Synthetic splits use Wilson for rates and a two-sample
+bootstrap for AUROC. Real splits use the photo-clustered bootstrap. FA means false alarms (negatives with
+presence ≥ τ).
+
+| | v1.5b seed 0 | v3a seed 0 |
+|---|---|---|
+| τ (1% of val empties) | 0.549 | 0.566 |
+| val AUROC, signs vs empties | 0.9988 [0.9981, 0.9994] | 0.9991 [0.9985, 0.9996] |
+| val found at τ | 98.40% [98.01, 98.71] | 98.46% [98.08, 98.77] |
+| val joint (τ ignored) | 98.46% | 98.62% |
+| val decoy FA, plain paste | 12.92% [12.02, 13.88] | 8.98% [8.22, 9.80] |
+| val decoy FA, training paste | 15.78% [14.80, 16.82] | 11.54% [10.68, 12.46] |
+| real_dev AUROC | 0.9964 [0.9941, 0.9984] | 0.9967 [0.9943, 0.9986] |
+| real_dev AUROC, unseen signs | 0.9960 [0.9935, 0.9982] | 0.9962 [0.9935, 0.9982] |
+| real_dev AUROC, uniform / sign-height negatives | 0.9962 / 0.9966 | 0.9981 / 0.9952 |
+| real_dev FA at τ | 12/1200 = 1.00% [0.50, 1.58] | 6/1200 = 0.50% [0.17, 0.92] |
+| real_dev found at τ | 93.02% [90.94, 94.99] | 90.08% [87.56, 92.34] |
+| real_dev found at τ, unseen signs | 91.58% [88.93, 94.01] | 88.71% [85.65, 91.55] |
+| real_dev joint (τ ignored) | 97.52% | 98.14% |
+| real_dev found at the threshold giving 1% / 5% FA on real negatives | 93.2% / 97.4% | 94.7% / 97.7% |
+| said yes: real sign vs its hybrid twin (of 645) | 610 vs 644: gap 5.3 pts, McNemar p = 1e-9 | 588 vs 643: gap 8.5 pts, p = 8e-16 |
+| median presence, hybrid minus real | +0.111 | +0.119 |
+
+AUROC difference, v3a minus v1.5b on the same scenes, with a paired interval
+(`scripts/compare_presence.py`):
+
+| Seed | real_dev ΔAUROC | val ΔAUROC |
+|---|---|---|
+| 0 | +0.0003 [−0.0015, +0.0022] | +0.0003 [−0.0001, +0.0008] |
+| 1 | −0.0005 [−0.0026, +0.0014] | −0.0004 [−0.0011, +0.0002] |
+| 2 | +0.0013 [+0.0001, +0.0026] | +0.0003 [−0.0002, +0.0008] |
+
+Three-seed means, v1.5b → v3a:
+- τ: 0.548 → 0.476
+- real_dev AUROC: 0.9967 → 0.9970
+- real_dev FA: 0.69% → 0.58%
+- real_dev found: 92.1% → 92.8%
+- plain-decoy FA: 13.0% → 13.3%
+- seam gap: 6.5 → 5.6 points
+
+v3a's own seeds spread widely, because their τ differs:
+
+| v3a seed | τ | real_dev found | plain-decoy FA |
+|---|---|---|---|
+| 0 | 0.566 | 90.1% | 9.0% |
+| 1 | 0.518 | 92.9% | 12.2% |
+| 2 | 0.343 | 95.5% | 18.9% |
+
+A lower τ finds more real signs and fires on more decoys, which is one trade-off curve.
+
+**P6 contact sheet** (`results/v3a/p6_sheet.png`). I labeled it from the image alone and committed the
+labels (6cc14de) before `scripts/p6_join.py` read the key. Results are in `results/v3a/p6_result.json`.
+
+| Group | A: sign outside the 43 classes | B: sign of the 43 classes | C: sign-like | D: nothing sign-like |
+|---|---|---|---|---|
+| top 20 by presence | 6 | 2 | 6 | 6 |
+| 20 random controls | 1 | 0 | 4 | 15 |
+
+The one borderline call in the top 20 was tile 19, two notice plates behind a fence. I labeled it C;
+counting it as A gives 9/20, which still fails P6. v3a seed 0 has 6 real_dev false alarms at τ:
+- 3 are A: a no-parking disc, a pedestrian-crossing square and a P sign;
+- 2 are C: a tail light and a green traffic light;
+- 1 is D.
+
+### Predictions vs outcome (dev)
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| P1 | v1.5b real_dev AUROC 0.80–0.95 (guess 0.88) | 0.9964 | ✗ far too pessimistic, again |
+| P2 | val AUROC ≥ 0.995; test FA ≤ 2% | val 0.9991; test below | ✓ val half |
+| P3 | test joint costs ≤ 0.5 pts | graded below | |
+| P4 | v3a real_dev AUROC ≥ 0.95, and ΔAUROC > 0 with interval excluding 0 | 0.9967, but Δ = +0.0003 [−0.0015, +0.0022] | ✗ no improvement shown |
+| P5 | real_dev FA at τ 2–15% (guess 6%), found ≥ 92% | FA 0.50%, found 90.08% | ✗ both halves; τ is *stricter* on real |
+| P6 | ≥ 10 of the top 20 real negatives are A or B | 8 of 20 | ✗ |
+| P7 | decoy FA ≤ 3% on both decoy sets | 8.98% and 11.54% | ✗ |
+| P8 | real said-yes at most 3 pts below hybrid | 8.5 pts below | ✗ |
+
+### What it means (dev)
+
+- **Training on empties changed almost nothing.** v3a and v1.5b differ by less than the seed-to-seed
+  spread on every number. Two of three ΔAUROC intervals cover zero, and seed 1's point estimate is
+  negative.
+
+  My explanation, which I have not tested: v1.5b had already learned "no sign here". Its heatmap loss is
+  per cell. Each training scene has about 1,015 background cells out of 1,024, and all of them are pushed
+  toward zero. An empty scene is just 1,024 more cells of the same kind, so the 4,000 empties add about
+  25% more of what the model already sees. P1 is the evidence: v1.5b, never shown an empty scene, already
+  had real AUROC 0.996.
+- **Real background is easy. A pasted patch is not.**
+  - On real_dev negatives, both models fire less often (0.5–1.0%) than on the synthetic empties τ was set
+    on (1%).
+  - A background patch pasted where a sign would go fires 9–19% of the time.
+  - Real signs get "yes" 5–9 points less often than the same sign pixels pasted onto COCO, and their
+    median presence is 0.11–0.12 lower.
+
+  So part of what raises the peak is the paste edge itself. That cue is present on every synthetic sign
+  and on no real one. v1.5b has it to the same degree, so empties neither created it nor removed it.
+
+  It affects the peak's height, not the naming: real_dev joint is 97.5–98.1% with τ ignored. That is why
+  P5 failed in both directions:
+  - real negatives fall under τ more easily than expected;
+  - real signs also fall under it more easily, so found is 90.1%.
+- **Half of the real false alarms are real signs.** GTSDB labels only the 43 GTSRB classes. Parking
+  signs, crossing squares and chevron boards are unlabeled, so the measured 0.50% overstates the true
+  false-alarm rate. Still, the top 20 is not mostly signs (8/20): lights, logos and plain road scenes fill
+  the other 12.
+- **For v3b (an idea, not a result):** the direct fix for the seam cue is to train with decoys as
+  negatives, so that a pasted rectangle with no sign counts as "no sign". Another option is a paste that
+  leaves no edge. Either one, not more empties.
+
+### Not covered (dev)
+
+- Whole-photo search. The model still only sees 128×128 windows.
+- One labeler for P6 (me), with no second pass. Only seed 0 has a sheet.
+- The "unseen" subset removes exact-frame overlaps only, as in v2.
+
 ---
 
 ## v2: real road photos (GTSDB) — 2026-11-09
