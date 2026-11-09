@@ -105,6 +105,18 @@ def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg
     return Scene(image=_finish(canvas, rng, cfg), box=box, heatmap=box_heatmap(box, cfg))
 
 
+def make_empty_scene(bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Scene:
+    """A scene with no sign: the same crop, resize, blur and noise as make_scene, with no paste.
+
+    Box (0, 0, 0, 0) and an all-zero heatmap. Its crop draws come first, as in make_scene, so with the
+    same rng state it crops the same region of bg that make_scene would paste onto. Does not mutate bg.
+    Raises whatever PIL raises on unreadable image data.
+    """
+    canvas = _canvas(bg, rng, cfg)
+    heatmap = np.zeros((cfg.heatmap_size, cfg.heatmap_size), np.float32)
+    return Scene(image=_finish(canvas, rng, cfg), box=(0, 0, 0, 0), heatmap=heatmap)
+
+
 def _canvas(bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Image.Image:
     """First half of every scene's background pipeline: a random square crop of bg, resized to the scene."""
     s = cfg.scene_size
