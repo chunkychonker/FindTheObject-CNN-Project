@@ -3,13 +3,15 @@
 Usage:
     python scripts/evaluate.py --checkpoint outputs/checkpoints/<run>/best.pt --split val
     python scripts/evaluate.py --checkpoint outputs/checkpoints/<run>/best.pt --split test   # once per checkpoint
+    python scripts/evaluate.py --checkpoint ... --split real_dev   # v2: real_dev, hybrid_dev, real_test, hybrid_test
 
 Writes outputs/eval/<run>/<checkpoint>_<split>.json with all metrics, per-class accuracy, the confusion
-matrix, and the SHA-256 of the data file (so a number stays tied to the exact data that produced it).
+matrix, per-scene outcomes (correct class, peak in box, predicted class; row i = scene i of the data file)
+and the SHA-256 of the data file (so a number stays tied to the exact data that produced it).
 Data dir and loss weight come from the config stored in the checkpoint, not from configs/.
 
-Test guard: if a test result for this checkpoint already exists, exits with code 2 before evaluating,
-unless --force. Val results are overwritten freely. Raises FileNotFoundError for a missing checkpoint or
+Test guard: for any split ending in "test", if a result for this checkpoint already exists, exits with code 2 before evaluating,
+unless --force. Other results are overwritten freely. Raises FileNotFoundError for a missing checkpoint or
 data file, ValueError for malformed data, RuntimeError if the weights don't fit the model. The JSON is
 written atomically, so a failed run leaves no partial result.
 """
@@ -35,12 +37,13 @@ from findobject.utils.device import pick_device
 EVAL_ROOT = Path("outputs/eval")
 BATCH_SIZE = 256
 WORST_SHOWN = 5
+SPLITS = ("val", "test", "real_dev", "hybrid_dev", "real_test", "hybrid_test")  # data file = <split>.npz
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--split", choices=("val", "test"), required=True)
+    parser.add_argument("--split", choices=SPLITS, required=True)
     parser.add_argument("--force", action="store_true", help="re-run test even if a result already exists")
     args = parser.parse_args()
 
@@ -69,6 +72,8 @@ def main() -> None:
         "val_metrics_at_save": info.metrics,
         "per_class": {"counts": report.counts, "accuracy": report.accuracy},
         "confusion": report.confusion,
+        "per_scene": {"correct": (result.y_true == result.y_pred).int().tolist(), "hit": result.hit.int().tolist(),
+                      "y_pred": result.y_pred.tolist()},
         "device": str(device),
         "torch_version": str(torch.__version__),
         "evaluated_at": datetime.now().isoformat(timespec="seconds"),
@@ -94,11 +99,16 @@ def refuse_test_rerun(path: Path, split: str, force: bool) -> None:
     Test is meant to be looked at once; re-running it while tweaking turns it into a second val set.
     This is a guard against accidents, not a security boundary.
     """
-    if split == "test" and path.exists() and not force:
+    if is_test_split(split) and path.exists() and not force:
         print(f"refusing: test result already exists at {path}\n"
               f"the test set is scored once per checkpoint; pass --force only if you mean to re-score it",
               file=sys.stderr)
         raise SystemExit(2)
+
+
+def is_test_split(split: str) -> bool:
+    """test, real_test, hybrid_test: the splits scored once."""
+    return split.endswith("test")
 
 
 def sha256_file(path: Path) -> str:
