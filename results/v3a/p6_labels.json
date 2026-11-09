@@ -1,0 +1,38 @@
+{
+  "sheet": "results/v3a/p6_sheet.png",
+  "sheet_sha256": "e2238263bbfcf63455d75e149e2b35863f0fc10ce442c9923907d968f677a07b",
+  "labeler": "Claude (Opus 5.5), from the sheet image alone; p6_key.json and the per-window presences not opened",
+  "rule": "A unlabeled sign outside the 43 classes, B unlabeled sign of the 43 classes (half its face in the window), C sign-like non-sign, D nothing sign-like; when unsure, the later letter",
+  "labels": {
+    "1": "C", "2": "D", "3": "D", "4": "D", "5": "C", "6": "D", "7": "A", "8": "D", "9": "A", "10": "D",
+    "11": "D", "12": "A", "13": "A", "14": "C", "15": "D", "16": "C", "17": "D", "18": "D", "19": "C", "20": "D",
+    "21": "A", "22": "D", "23": "C", "24": "D", "25": "C", "26": "C", "27": "C", "28": "C", "29": "A", "30": "D",
+    "31": "A", "32": "D", "33": "D", "34": "D", "35": "B", "36": "B", "37": "D", "38": "D", "39": "D", "40": "D"
+  },
+  "notes": {
+    "1": "red plate on a building wall, a shop or house sign, not a traffic sign: logo",
+    "5": "car tail light",
+    "6": "road with cars and a bus; no light or sign clearly visible (C vs D -> D)",
+    "7": "three red-white chevron boards (curve markers), whole faces in the window",
+    "8": "trucks on a motorway, no clear lights (C vs D -> D)",
+    "9": "small blue disc with red ring (no parking / no stopping) at the left edge, whole face in the window; also a white plate on a pole",
+    "10": "pale shape cut by the bottom edge, not identifiable",
+    "12": "blue disc with red ring and diagonal (no parking) on a pole",
+    "13": "single red-white chevron board on the guardrail",
+    "14": "store logo lettering and an orange beacon lamp",
+    "16": "traffic-light housing at the right edge; a plate on a post seen edge-on",
+    "19": "two white notice plates with emblems behind a fence, likely nature-reserve markers: real signs but not traffic signs; unsure A vs C -> C",
+    "21": "blue square pedestrian-crossing sign, and a second smaller one lower down",
+    "23": "traffic light and truck lights",
+    "25": "green traffic light at the top edge",
+    "26": "car headlights",
+    "27": "car headlights",
+    "28": "small red-white plate on a pole bracket, not identifiable as a sign",
+    "29": "two blue P (parking) signs, whole faces in the window",
+    "31": "blue rectangular P / information sign, whole face in the window; a lettered container too",
+    "32": "blurred vehicle or shop side with lettering (C vs D -> D)",
+    "35": "white zone board with a red-ringed no-overtaking pictogram (cut slightly at the left edge, more than half visible) above a yellow town sign; the pictogram matches a GTSRB class but the board is a zone sign; unsure A vs B -> B",
+    "36": "small yellow priority-road diamond (one of the 43 classes), plus P and direction signs and traffic lights",
+    "39": "overexposed sky, blank"
+  }
+}
