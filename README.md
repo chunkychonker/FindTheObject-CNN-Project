@@ -29,6 +29,21 @@ In all four misses the model found the sign but named a look-alike.
 
 Regenerate with `python scripts/make_demo_figure.py --checkpoint outputs/checkpoints/<run>/best.pt`.
 
+## Data
+
+Raw downloads go in `data/raw/` (gitignored):
+
+| Dataset | Used for | Put it at |
+|---|---|---|
+| GTSRB (training + `GTSRB_Final_Test_GT.zip`) | sign crops for synthetic scenes | `data/raw/gtsrb/` |
+| COCO val2017 + annotations | backgrounds | `data/raw/coco/` |
+| GTSDB `FullIJCNN2013.zip` (1.66 GB) | real road photos, v2 only | `data/raw/gtsdb/`, unzipped to `data/raw/gtsdb/FullIJCNN2013/` |
+
+GTSDB is published at
+<https://erda.ku.dk/public/archives/ff17dc924eba88d5d01a807357d6614c/published-archive.html>. The zip used
+here has SHA-256 `45faf2894b9fc455d14ecaa7942e976992b55ca54ee7184a2fbaf2cfef9e4c7b`. If you use it in a
+publication, cite Houben et al., IJCNN 2013.
+
 ## Try it on your own images
 
 ```
