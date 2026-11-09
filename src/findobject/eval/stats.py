@@ -1,7 +1,10 @@
-"""Confidence intervals for rates and an exact paired test (pure, no I/O)."""
+"""Statistical summaries of scored outcomes: rate intervals, a paired test, AUROC, a clustered bootstrap. Pure."""
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
+
+import numpy as np
 
 Z95 = 1.959963984540054  # standard normal 97.5th percentile
 
@@ -51,3 +54,46 @@ def mcnemar_exact(only_a: int, only_b: int) -> float:
         return 1.0
     tail = sum(math.comb(n, i) for i in range(k + 1))  # exact integers; divide once at the end
     return min(1.0, 2 * tail / 2**n)
+
+
+def auroc(pos: np.ndarray, neg: np.ndarray) -> float:
+    """Area under the ROC curve: the chance a random positive scores above a random negative, ties
+    counted half (the Mann-Whitney U statistic divided by n_pos * n_neg).
+
+    Raises ValueError if either array is empty, not 1-D, or holds a non-finite score.
+    """
+    pos, neg = np.asarray(pos, np.float64), np.asarray(neg, np.float64)
+    for name, a in (("pos", pos), ("neg", neg)):
+        if a.ndim != 1 or len(a) == 0 or not np.isfinite(a).all():
+            raise ValueError(f"{name} must be a non-empty 1-D array of finite scores, got shape {a.shape}")
+    sorted_neg = np.sort(neg)
+    below = np.searchsorted(sorted_neg, pos, side="left")  # negatives strictly below each positive
+    tied = np.searchsorted(sorted_neg, pos, side="right") - below
+    return (int(below.sum()) + 0.5 * int(tied.sum())) / (len(pos) * len(neg))
+
+
+def cluster_bootstrap(stat: Callable[[np.ndarray], float], clusters: np.ndarray, n_resamples: int,
+                      rng: np.random.Generator) -> tuple[float, float]:
+    """Percentile 95% interval of `stat` over resamples that draw whole clusters with replacement.
+
+    clusters[i] is row i's cluster (e.g. its photo). Each resample draws as many clusters as there are
+    distinct ones and passes stat the row indices of every drawn cluster (a cluster drawn twice brings its
+    rows twice). Rows of one cluster are not independent, so resampling rows one by one would give too
+    narrow an interval. With one row per cluster this is the ordinary bootstrap.
+    Raises ValueError if clusters is empty or not 1-D or n_resamples < 1; whatever stat raises (e.g. a
+    resample with no positives), uncaught.
+    """
+    clusters = np.asarray(clusters)
+    if clusters.ndim != 1 or len(clusters) == 0 or n_resamples < 1:
+        raise ValueError(f"need non-empty 1-D clusters and n_resamples >= 1, got {clusters.shape}, {n_resamples}")
+    order = np.argsort(clusters, kind="stable")  # rows grouped by cluster
+    _, starts, sizes = np.unique(clusters[order], return_index=True, return_counts=True)
+    values = np.empty(n_resamples)
+    for r in range(n_resamples):
+        drawn = rng.integers(len(starts), size=len(starts))
+        n_rows = sizes[drawn]
+        # Row positions start..start+size-1 for every drawn cluster, without a Python loop over clusters.
+        offset = np.arange(n_rows.sum()) - np.repeat(np.cumsum(n_rows) - n_rows, n_rows)
+        values[r] = stat(order[np.repeat(starts[drawn], n_rows) + offset])
+    lo, hi = np.percentile(values, [2.5, 97.5])
+    return float(lo), float(hi)
