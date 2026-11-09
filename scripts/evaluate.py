@@ -10,8 +10,8 @@ matrix, per-scene outcomes (correct class, peak in box, predicted class; row i =
 and the SHA-256 of the data file (so a number stays tied to the exact data that produced it).
 Data dir and loss weight come from the config stored in the checkpoint, not from configs/.
 
-Test guard: for any split ending in "test", if a result for this checkpoint already exists, exits with code 2 before evaluating,
-unless --force. Other results are overwritten freely. Raises FileNotFoundError for a missing checkpoint or
+Test guard (eval/test_guard.py): for any split ending in "test", if that test family was already scored for
+this run, by this script or by evaluate_presence.py, exits with code 2 before evaluating, unless --force. Other results are overwritten freely. Raises FileNotFoundError for a missing checkpoint or
 data file, ValueError for malformed data, RuntimeError if the weights don't fit the model. The JSON is
 written atomically, so a failed run leaves no partial result.
 """
@@ -31,6 +31,7 @@ from findobject.data.dataset import SignScenes
 from findobject.data.gtsrb import NUM_CLASSES
 from findobject.eval.evaluate import evaluate
 from findobject.eval.report import class_report
+from findobject.eval.test_guard import scored_results
 from findobject.training.checkpoint import load_checkpoint_info, load_model
 from findobject.utils.device import pick_device
 
@@ -94,13 +95,15 @@ def result_path(checkpoint: Path, split: str) -> Path:
 
 
 def refuse_test_rerun(path: Path, split: str, force: bool) -> None:
-    """Exit with code 2 if this would overwrite an existing test result without --force.
+    """Exit with code 2 if this would score a test split again without --force: the result at `path` exists,
+    or any other file of its test family in the same run (eval/test_guard.py) does.
 
     Test is meant to be looked at once; re-running it while tweaking turns it into a second val set.
     This is a guard against accidents, not a security boundary.
     """
-    if is_test_split(split) and path.exists() and not force:
-        print(f"refusing: test result already exists at {path}\n"
+    existing = ([path] if path.exists() else []) + [p for p in scored_results(path.parent, split) if p != path]
+    if is_test_split(split) and existing and not force:
+        print(f"refusing: test already scored for this run: {', '.join(map(str, existing))}\n"
               f"the test set is scored once per checkpoint; pass --force only if you mean to re-score it",
               file=sys.stderr)
         raise SystemExit(2)
