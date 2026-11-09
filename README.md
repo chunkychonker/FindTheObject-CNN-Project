@@ -5,11 +5,12 @@ sign is, the other is which of the 43 GTSRB sign classes it is. See [DETAILS.md]
 
 ## Results
 
-Scored once on a held-out test set of 5,000 synthetic scenes. Full write-up, setup and caveats in
-[RESULTS.md](RESULTS.md).
+Scored once on a held-out test set: 5,000 synthetic scenes, or for v2, real road-photo windows. Full
+write-up, setup and caveats in [RESULTS.md](RESULTS.md).
 
 | Version | Test joint acc | Class acc | Pointing acc | Median center error |
 |---|---|---|---|---|
+| v2 real photos (GTSDB): v1.5b on 289 real 128×128 windows | **98.6%** | 98.6% | 99.0% | 1.80 px |
 | v1.5b fresh, augmented training scenes | **97.8%** | 97.8% | 99.8% | 1.58 px |
 | v1.5 classify at the heatmap peak | 95.9% | 95.9% | 99.6% | 1.58 px |
 | v1 baseline | 94.2% | 94.2% | 99.7% | 1.58 px |
@@ -18,6 +19,10 @@ Scored once on a held-out test set of 5,000 synthetic scenes. Full write-up, set
 
 v1.5b retrained with 3 seeds scores **97.6% ± 0.2** test joint (range 97.5–97.8%). The table shows seed 0,
 the headline chosen before training (see v1.6 in RESULTS.md).
+
+v2 runs the same model, unchanged, on windows cut from real German road photos (GTSDB) around one
+labeled sign. It is not whole-photo detection. 24% of GTSDB signs are exact frames from GTSRB's training
+set. On the signs that aren't, real-dev joint is **97.1% [95.2, 98.3]**.
 
 ## What the model sees
 
