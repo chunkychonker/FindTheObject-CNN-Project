@@ -11,6 +11,53 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
+## v3a: saying "no sign here" — pre-registered 2026-11-09
+
+### Why
+
+Every training scene so far holds exactly one sign, so the model always finds one. v3b will run it over
+whole road photos, which are mostly empty. v3a trains on empty scenes too and reads "is there a sign" from
+the heatmap's peak height. Full spec: [docs/v3a-spec.md](docs/v3a-spec.md) (draft 2, approved).
+
+### Setup (fixed before any code was written and before any presence score existed)
+
+- **Presence** = the max over the 32×32 heatmap cells of sigmoid(logit). "Said yes" means presence ≥ τ.
+  τ is set per checkpoint so that at most 1% of the 5,000 synthetic val empties score ≥ τ (spec §2.5).
+  It is then fixed for every other split.
+- **v3a training:** v1.5b's config, except that the last 4,000 of each epoch's 20,000 fresh scenes are
+  empty (all-zero heatmap, no class). This keeps v1.5b's step count, learning-rate schedule,
+  initialisation and batch order. The class loss is the sum over sign scenes divided by batch size.
+  Seeds 0, 1 and 2.
+- **Baseline:** v1.5b, not retrained. Seed 0 is `peak_fresh_aug-20261108-024220`; seeds 1 and 2 are
+  `peak_fresh_aug_s1-20261108-062248` and `peak_fresh_aug_s2-20261108-071534`.
+- **Negatives:**
+  - 5,000 synthetic val and 5,000 test empties;
+  - 5,000 val decoys each with the plain and the training paste (a background patch pasted where a
+    sign would go);
+  - real GTSDB windows that touch no labeled sign, one uniform and one at sign height per photo, from
+    600 dev and 300 test photos.
+- **Intervals:** Wilson on synthetic splits. Real splits use a photo-clustered bootstrap (2,000
+  resamples).
+- **Grading:** every prediction is graded on v3a seed 0 against v1.5b seed 0 unless its row says
+  otherwise. Real-test carries no prediction, and each test split is scored once per seed.
+
+### Predictions (frozen before any code; copied from spec §2.8)
+
+| # | Prediction | Measured on |
+|---|---|---|
+| P1 | v1.5b, never trained on empties, already separates real sign windows from real negative windows: AUROC between 0.80 and 0.95 (guess 0.88) | real_dev, both strata pooled |
+| P2 | v3a separates synthetic signs from empties almost perfectly: val AUROC ≥ 0.995, and test false alarms at τ ≤ 2% | val; test |
+| P3 | Saying "no" costs little (one-sided): v3a seed 0's test joint ≥ 97.28% (v1.5b's 97.78% − 0.5), and the 3-seed mean ≥ 97.09% (v1.5b's 97.59% − 0.5). Guess: seed 0 at 97.4% | test, seeds 0–2 |
+| P4 | Training on empties improves real separation: v3a real_dev AUROC ≥ 0.95, and ΔAUROC (v3a − v1.5b) > 0 with the clustered 95% interval excluding 0 | real_dev |
+| P5 | The synthetic τ transfers imperfectly: real_dev false alarms at τ between 2% and 15% (guess 6%), and real_dev found ≥ 92% | real_dev |
+| P6 | At least 10 of the 20 highest-presence real_dev negatives are labeled A or B (an unlabeled real sign), labeled blind under spec §2.9 | real_dev contact sheet |
+| P7 | No seam shortcut on synthetic: false alarms at τ ≤ 3% on both decoy sets | val decoys |
+| P8 | No seam shortcut on real: v3a's said-yes rate on real_dev signs is at most 3 points below its rate on their hybrid twins (guess 1 point) | real_dev vs hybrid_dev |
+
+"Found" means said yes, *and* peak inside the sign's box, *and* class right.
+
+---
+
 ## v2: real road photos (GTSDB) — 2026-11-09
 
 ### Why
