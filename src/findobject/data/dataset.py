@@ -12,17 +12,25 @@ from findobject.data.gtsrb import NUM_CLASSES
 
 _KEYS = ("images", "class_ids", "boxes", "heatmaps")
 
+IGNORE_CLASS = -100  # class_id of a scene with no sign; equals torch cross_entropy's default ignore_index
+
 
 class Sample(NamedTuple):
     """One scene. DataLoader's default collate batches each field (leading dim B)."""
 
     image: Tensor  # float32 [3, S, S] in [0, 1]
     heatmap: Tensor  # float32 [1, H, H] in [0, 1]
-    class_id: Tensor  # int64 scalar in [0, NUM_CLASSES)
+    class_id: Tensor  # int64 scalar in [0, NUM_CLASSES), or IGNORE_CLASS for a scene with no sign
     box: Tensor  # int64 [4] x1, y1, x2, y2 in scene px; x2/y2 exclusive
 
     def to(self, device: torch.device) -> "Sample":
         return Sample(*(t.to(device) for t in self))
+
+
+def has_sign(class_id: Tensor) -> Tensor:
+    """Bool tensor of class_id's shape: True where the scene holds a sign. The only test for "has a sign",
+    so it can never disagree with the stored class id."""
+    return class_id != IGNORE_CLASS
 
 
 class SignScenes(Dataset[Sample]):
