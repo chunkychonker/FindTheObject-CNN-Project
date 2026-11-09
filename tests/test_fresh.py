@@ -1,9 +1,14 @@
+import hashlib
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
+import yaml
 from PIL import Image
 from torch.utils.data import DataLoader
 
+from findobject.data.data_config import train_synth_config
 from findobject.data.fresh import FreshScenes
 from findobject.data.gtsrb import SignSample
 from findobject.data.sign_augment import SignAugment
@@ -31,6 +36,28 @@ def source(tmp_path_factory) -> SceneSource:
 
 def _same(a, b) -> bool:
     return all(torch.equal(x, y) for x, y in zip(a, b))
+
+
+# SHA-256 of FreshScenes scenes 0-9 of epochs 1 and 2 with v1.5b's exact training settings, recorded from
+# the code v1.5b trained with (before any v3a change). It guards the augmented path that
+# PRE_AUGMENT_DIGEST (tests/test_sign_augment.py) does not cover.
+FRESH_AUG_DIGEST = "a81cf0b5b53d72fd39c75582425ac74d35a0059c11188ec5e249139fde30d503"
+V15B_CONFIG = Path(__file__).resolve().parents[1] / "configs" / "peak_fresh_aug.yaml"
+
+
+def fresh_aug_digest(source: SceneSource) -> str:
+    cfg = train_synth_config(yaml.safe_load(V15B_CONFIG.read_text())["data"])
+    h = hashlib.sha256()
+    for epoch in (1, 2):
+        ds = FreshScenes(source, cfg, 10, seed=0, epoch=epoch)
+        for i in range(10):
+            for t in ds[i]:
+                h.update(t.numpy().tobytes())
+    return h.hexdigest()
+
+
+def test_v15b_training_scenes_unchanged(source):
+    assert fresh_aug_digest(source) == FRESH_AUG_DIGEST
 
 
 def test_sample_format_matches_stored_scenes(source):
