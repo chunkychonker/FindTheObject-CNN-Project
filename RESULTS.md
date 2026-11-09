@@ -178,6 +178,29 @@ counting it as A gives 9/20, which still fails P6. v3a seed 0 has 6 real_dev fal
 - One labeler for P6 (me), with no second pass. Only seed 0 has a sheet.
 - The "unseen" subset removes exact-frame overlaps only, as in v2.
 
+### Test (each split scored once per seed, after the dev analysis above was committed)
+
+| v3a seed | τ | test AUROC | test FA at τ | test found | **test joint** | real_test AUROC | real_test FA | real_test found | real said yes vs hybrid |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.566 | 0.9977 [0.9967, 0.9985] | 0.90% (45/5000) [0.67, 1.20] | 96.54% | **97.58%** [97.12, 97.97] | 0.9974 [0.9950, 0.9994] | 3/600 | 92.39% [89.24, 95.32] | 93.1% vs 100.0% (p = 2e-6) |
+| 1 | 0.518 | 0.9983 | 0.90% (45/5000) | 96.78% | **97.56%** | 0.9981 | 2/600 | 96.54% | 96.9% vs 99.7% (p = 0.02) |
+| 2 | 0.343 | 0.9988 | 1.46% (73/5000) | 97.46% | **97.88%** | 0.9985 | 7/600 | 97.23% | 99.0% vs 100.0% (p = 0.25) |
+
+3-seed mean test joint: **97.67%** (v1.5b: 97.59%).
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| P2 | val AUROC ≥ 0.995, and test FA at τ ≤ 2% | val 0.9991, test 0.90% | ✓ |
+| P3 | seed 0 test joint ≥ 97.28%, 3-seed mean ≥ 97.09% (guess 97.4%) | 97.58% and 97.67% | ✓ |
+
+**Final tally: 2 of 8** (P2, P3). The two that held are the ones that said "v3a does no harm", and v3a
+also did little good.
+
+- On synthetic test, v3a matches v1.5b on joint: seed 0 is 0.20 points lower, and the mean is 0.08 higher.
+- The synthetic τ carries over to test empties: 0.90% against the 1% it was set for on val.
+- Real test repeats dev. Real FA at τ is low (0.3–1.2%), and real signs get "yes" less often than their
+  hybrid twins, by 1–7 points depending on the seed.
+
 ---
 
 ## v2: real road photos (GTSDB) — 2026-11-09
