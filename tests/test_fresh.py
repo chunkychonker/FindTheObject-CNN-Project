@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 
 from findobject.data.data_config import train_synth_config
+from findobject.data.dataset import IGNORE_CLASS, has_sign
 from findobject.data.fresh import FreshScenes
 from findobject.data.gtsrb import SignSample
 from findobject.data.sign_augment import SignAugment
@@ -107,3 +109,35 @@ def test_index_out_of_range(source):
     ds = FreshScenes(source, CFG, 3, 0, 1)
     with pytest.raises(IndexError):
         ds[3]
+
+
+# --- v3a: the last n_empty scenes hold no sign ---
+
+def test_empties_leave_sign_scenes_unchanged_and_fill_the_tail(source):
+    plain, mixed = FreshScenes(source, CFG, 10, seed=0, epoch=1), FreshScenes(source, CFG, 10, seed=0, epoch=1, n_empty=4)
+    assert len(mixed) == 10
+    for i in range(6):
+        assert _same(plain[i], mixed[i])
+    for i in range(6, 10):
+        s = mixed[i]
+        assert s.class_id.item() == IGNORE_CLASS and not has_sign(s.class_id)
+        assert s.heatmap.abs().sum().item() == 0 and s.box.tolist() == [0, 0, 0, 0]
+        assert s.image.shape == plain[i].image.shape and s.heatmap.shape == plain[i].heatmap.shape
+
+
+def test_empty_scene_has_the_background_its_sign_scene_was_pasted_onto(source):
+    # No blur or noise, so outside the sign's box the sign scene is exactly its background crop.
+    cfg = dataclasses.replace(CFG, blur_prob=0.0, noise_max_std=0.0)
+    for i in range(5, 10):
+        sign = FreshScenes(source, cfg, 10, seed=2, epoch=3)[i]
+        empty = FreshScenes(source, cfg, 10, seed=2, epoch=3, n_empty=5)[i]
+        x1, y1, x2, y2 = sign.box.tolist()
+        outside = torch.ones(sign.image.shape[1:], dtype=torch.bool)
+        outside[y1:y2, x1:x2] = False
+        assert outside.any() and torch.equal(sign.image[:, outside], empty.image[:, outside])
+
+
+@pytest.mark.parametrize("n_empty", [-1, 10, 11])
+def test_rejects_n_empty_outside_0_to_n(source, n_empty):
+    with pytest.raises(ValueError):
+        FreshScenes(source, CFG, 10, 0, 1, n_empty=n_empty)
