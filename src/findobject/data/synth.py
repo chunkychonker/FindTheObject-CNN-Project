@@ -108,14 +108,20 @@ def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg
     image = np.asarray(canvas, dtype=np.float32)
     image = image + rng.normal(0.0, rng.uniform(0, cfg.noise_max_std), image.shape)
     image = np.clip(image, 0, 255).astype(np.uint8)
+    return Scene(image=image, box=box, heatmap=box_heatmap(box, cfg))
 
+
+def box_heatmap(box: tuple[int, int, int, int], cfg: SynthConfig) -> np.ndarray:
+    """The target heatmap for a sign at `box` (scene px, x2/y2 exclusive): a Gaussian at the box center.
+
+    Shared by synthetic scenes and real-photo windows so both use one formula. Never raises for a
+    valid SynthConfig (the center may lie anywhere; far-off centers just give a near-zero map).
+    """
     # Heatmap cell c covers scene pixels [c*stride, (c+1)*stride), centered at (c + 0.5)*stride.
-    stride = s / cfg.heatmap_size
+    stride = cfg.scene_size / cfg.heatmap_size
     bx1, by1, bx2, by2 = box
     center = ((bx1 + bx2) / 2 / stride - 0.5, (by1 + by2) / 2 / stride - 0.5)
-    heatmap = gaussian_heatmap(center, cfg.heatmap_size, cfg.heatmap_sigma)
-
-    return Scene(image=image, box=box, heatmap=heatmap)
+    return gaussian_heatmap(center, cfg.heatmap_size, cfg.heatmap_sigma)
 
 
 def _paste_augmented(

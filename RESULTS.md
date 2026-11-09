@@ -11,6 +11,158 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
+## v2: real road photos (GTSDB) — 2026-11-09
+
+### Why
+
+Every number so far is on synthetic scenes: a GTSRB sign crop pasted onto a COCO photo. v2 asks how much
+of v1.5b's 97.8% survives on real road photos, and separates two causes of any drop. Full spec:
+[docs/v2-spec.md](docs/v2-spec.md).
+
+### Setup (fixed before any real or hybrid scene was scored)
+
+- **Model:** v1.5b seed 0 (`peak_fresh_aug-20261108-024220/best.pt`), not retrained. Seeds 1 and 2 only
+  for P7.
+- **Data:** GTSDB (900 photos, 1360×800, 1,213 labeled signs). Photos 0–599 = **dev**, 600–899 = **test**
+  (the official split), and test is scored once per seed.
+- **Three tiers, paired on the same signs:**
+  - *real*: a 128×128 window cut from the photo around one labeled sign. The sign keeps its native size,
+    shrunk only when its longer side exceeds 48 px. The window is placed at random but contains no other
+    labeled sign.
+  - *hybrid*: the same sign's pixels pasted onto a COCO background exactly like val/test scenes.
+  - *synthetic*: the existing test set (97.8%).
+- **Windows:** dev 852 signs → 645 windows, test 361 → 289. The rest (207 dev, 72 test) are skipped because
+  no window fits around them without another labeled sign; this leaves out tightly clustered signs.
+- **Size buckets** (native longer side L) in dev: small L < 24: 63, medium: 356, large L ≥ 48: 226.
+- **Data hashes (SHA-256):** real_dev `4dcd6310…`, hybrid_dev `8aad6c35…`, real_test `da057051…`,
+  hybrid_test `1bc58def…`. The full hashes are in each result JSON.
+
+### Overlap with GTSRB training (found before scoring)
+
+GTSRB and GTSDB come from the same group, and they share recordings. `scripts/check_gtsdb_overlap.py` found
+that **297 of the 1,213 GTSDB signs (24%) appear pixel-for-pixel in a GTSRB training image**: the same
+video frame, cropped. The match is exact (mean difference 0.0; the next-closest candidate is above 1.0 on
+a 0–255 scale). A calibrated similarity test flags 32 more possible matches. The model has trained on
+these exact signs.
+
+So every result is reported on four subsets:
+
+| Subset | Meaning | dev windows | test windows |
+|---|---|---|---|
+| all | every window (what P1–P7 are graded on) | 645 | 289 |
+| unseen | no exact-frame match | 487 | 216 |
+| unflagged | neither exact nor similarity-flagged | 470 | 209 |
+| seen | exact-frame match | 158 | 73 |
+
+"Unseen" is the honest real-world number. It is still not proof: the same physical sign in another frame
+of the same video would pass the exact test. The gap between seen and unseen is a second measure of
+memorization, this time on real data. Per-sign flags and the contact sheet are in
+`results/v2-gtsdb-overlap/`.
+
+### Predictions (frozen before scoring; unchanged from the spec)
+
+| # | Prediction | Measured on |
+|---|---|---|
+| P1 | Real-dev joint is between 75% and 92% (point guess 85%) | real_dev, seed 0 |
+| P2 | Hybrid-dev joint is ≥ 90%: real sign pixels alone cost under 8 points | hybrid_dev, seed 0 |
+| P3 | Real < hybrid on the same signs, McNemar p < 0.05: the real surroundings cost something on top | paired dev |
+| P4 | Real pointing drops below 96% (synthetic: 99.8%), because the peak sometimes lands on other objects or unlabeled signs | real_dev |
+| P5 | Small signs (`L < 24`) score ≥ 10 points lower in joint than large ones (`L ≥ 48`) | real_dev |
+| P6 | Real-test joint falls inside real-dev's 95% interval | real_test, once |
+| P7 | All three seeds' real-test joint lies within ±3 points of each other | real_test |
+
+These were written before the overlap was known, and are graded on *all* windows as written. The overlap
+probably makes P1 and P2 easier to meet. Dev small has only 63 windows, so P5's interval will be wide.
+
+### Results
+
+**Read this first:** the model is shown a 128×128 window that was chosen to contain one labeled sign. This
+measures *finding and naming a sign within a window that has one*, on real pixels. It is not a detector
+running over whole road photos.
+
+Seed 0 (the headline model). Brackets are Wilson 95% intervals.
+
+| Tier | Split | n | Joint | Class | Pointing |
+|---|---|---|---|---|---|
+| synthetic | val / test | 5,000 each | 98.5% / 97.8% | 98.5% / 97.8% | 99.9% / 99.8% |
+| hybrid | dev | 645 | 98.3% [97.0, 99.0] | 98.3% | 99.7% |
+| **real** | **dev** | 645 | **97.5% [96.0, 98.5]** | 97.5% | 98.6% |
+| hybrid | test | 289 | 99.7% [98.1, 99.9] | 99.7% | 100.0% |
+| **real** | **test** | 289 | **98.6% [96.5, 99.5]** | 98.6% | 99.0% |
+
+By overlap subset, real joint:
+
+| Subset | dev (seed 0) | test seed 0 | test seed 1 | test seed 2 |
+|---|---|---|---|---|
+| all | 97.5% (629/645) | 98.6% (285/289) | 98.6% (285/289) | 97.9% (283/289) |
+| **unseen** | **97.1% [95.2, 98.3]** (n=487) | 98.6% (213/216) | 98.1% (212/216) | 97.2% (210/216) |
+| unflagged | 97.4% (n=470) | 98.6% (n=209) | — | — |
+| seen | 98.7% (n=158) | 98.6% (n=73) | — | — |
+
+Real vs hybrid, same signs (pairs where only one tier was right, then exact McNemar p): dev 9 vs 14,
+p = 0.40. Test: seed 0 1 vs 4 (p = 0.38), seed 1 3 vs 3 (p = 1), seed 2 0 vs 6 (p = 0.031).
+
+Real dev by native size: small 98.4% [91.5, 99.7] (n=63), medium 97.2% (n=356), large 97.8% (n=226).
+
+Leak check (`scripts/mask_check_real.py`): blanking the sign in every real-dev window drops class accuracy
+from 97.5% to 5.4%, below the 8.5% majority-class rate. The model is reading the sign, not its
+surroundings.
+
+### Predictions vs outcome
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| P1 | Real-dev joint 75–92% (guess 85%) | 97.5% | ✗ far too pessimistic |
+| P2 | Hybrid-dev joint ≥ 90% | 98.3% | ✓ |
+| P3 | Real < hybrid, McNemar p < 0.05 | right direction, 9 vs 14, p = 0.40 | ✗ not shown |
+| P4 | Real pointing < 96% | 98.6% | ✗ |
+| P5 | Small ≥ 10 pts below large | small 98.4%, large 97.8% | ✗ no gap |
+| P6 | Real-test inside real-dev's 95% CI | 98.62% vs upper bound 98.47% | ✗ just above it |
+| P7 | Three seeds' real-test within ±3 pts | 97.9–98.6% | ✓ |
+
+2 of 7. Every miss was in the same direction: I expected real photos to be much harder than they were.
+
+### What it means
+
+- **Most of v1.5b's accuracy carries over to real photos.** It loses about 1 point from synthetic val (98.5%) to
+  real dev (97.5%), and about 1.4 on unseen signs (97.1%). Real test is higher still (98.6%; mean of three
+  seeds 98.4%). The synthetic recipe, real sign crops pasted onto real photos, was a better stand-in for
+  real windows than I assumed.
+- **Why my predictions were off.** Three reasons, all visible in the spec before scoring, which I didn't
+  weigh:
+  1. GTSRB crops are already real photos from the same kind of camera, roads and year. The hybrid tier
+     (98.3%) shows the sign pixels cost almost nothing.
+  2. With native sizing, every sign ends up inside the 16–48 px training range. The smallest GTSDB sign is
+     17 px, and anything bigger than 48 is shrunk to 48. So P5's size effect had nothing to work with.
+  3. Windows contain no other labeled sign, and 24% of signs (the clustered ones) were skipped. That makes
+     the task easier than real driving.
+- **The real surroundings do cost something, but it's small.** Real scored at or below hybrid in all four
+  paired comparisons, and pointing drops from 99.7% to 98.6% on dev. Of the 16 real-dev misses, 9 put the
+  peak somewhere other than the sign, usually on an *unlabeled* sign in view: parking, no-stopping, a
+  chevron. The rest are very dark, overexposed or faded signs (`results/v2-real/real_dev_errors.png`). With
+  only 9–23 disagreeing pairs per comparison, the gap is significant in just one of four (seed 2 test).
+- **Memorization on real data: probably about 1–2 points, but not established.** On dev, seen signs score
+  98.7% real and 100% hybrid, against 97.1% and 97.7% for unseen. That fits the 0.8-point sign gap v1.5b's
+  synthetic probe measured, but the intervals overlap. The headline real number should be the unseen one:
+  **97.1% [95.2, 98.3] on dev**.
+- **Test came out easier than dev.** Hybrid test is 98.6–100%. That is why P6 failed: test landed above
+  dev's interval, not below it.
+
+### Not covered
+
+- Whole-photo detection. The model never searches a 1360×800 photo, and it is never shown a window without
+  a sign (it always names one; see the README).
+- Clustered signs: the 24% skipped for having another labeled sign too close to fit a clean window.
+- "Unseen" is not proven unseen. A different frame of a sign that GTSRB recorded passes the exact test.
+- One country, one camera, one group's recordings. GTSDB's class mix is skewed: classes 12, 13, 38 and the
+  speed limits dominate.
+- Per-class numbers: only 22 of 43 classes have n ≥ 10 windows in dev. They are in the report JSONs.
+
+Files: `results/v2-real/seed{0,1,2}/` (eval JSONs with per-scene outcomes and the reports),
+`results/v2-gtsdb-overlap/`.
+
+---
+
 ## v1.6: seed variance of v1.5b — 2026-11-08
 
 ### Why

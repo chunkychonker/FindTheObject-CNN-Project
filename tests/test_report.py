@@ -55,17 +55,20 @@ def _evaluate_script():
     return module
 
 
-def test_existing_test_result_is_refused_without_force(tmp_path):
+@pytest.mark.parametrize("split", ["test", "real_test", "hybrid_test"])  # A11
+def test_existing_test_result_is_refused_without_force(tmp_path, split):
     cli = _evaluate_script()
-    existing = tmp_path / "best_test.json"
+    existing = tmp_path / f"best_{split}.json"
     existing.write_text("{}")
     with pytest.raises(SystemExit) as exc:
-        cli.refuse_test_rerun(existing, "test", force=False)
+        cli.refuse_test_rerun(existing, split, force=False)
     assert exc.value.code == 2
     assert existing.read_text() == "{}"
 
 
-@pytest.mark.parametrize("split,force,exists", [("test", True, True), ("val", False, True), ("test", False, False)])
+@pytest.mark.parametrize("split,force,exists", [("test", True, True), ("val", False, True), ("test", False, False),
+                                                    ("real_dev", False, True), ("hybrid_dev", False, True),
+                                                    ("real_test", True, True)])
 def test_guard_allows_force_val_and_first_run(tmp_path, split, force, exists):
     path = tmp_path / f"best_{split}.json"
     if exists:
