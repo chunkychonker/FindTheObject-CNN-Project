@@ -122,6 +122,24 @@ similarity. It writes a contact sheet of the 40 most similar pairs for a person 
 many pairs look like the same physical sign, and if there are any, also report accuracy with those
 signs removed. This flags likely overlap. It does not prove there is none.
 
+**As run (amended after the check, before any scoring; predictions in §2.7 unchanged).** Two changes from
+the plan above:
+
+- The similarity search compares 24×24 RGB crops (each channel standardized) with ~10% margin, and its
+  threshold is calibrated rather than eyeballed: the 99th percentile of GTSRB val-vs-train best matches
+  (known different physical signs), 0.976. 84 GTSDB signs (6.9%, vs 1% expected with no overlap) beat it.
+- The contact sheet showed identical frames, so an **exact-frame test** was added. GTSRB images are
+  unresized crops of video frames, so every same-class, same-size GTSRB training image is slid ±4 px
+  around the GTSDB box and compared pixel by pixel. **297 of 1,213 signs (dev 212, test 85) match a
+  training image exactly** (mean |difference| 0.0; the next-lowest is above 1). These are signs the
+  model trained on.
+
+Results are therefore reported on three subsets of the real (and paired hybrid) windows: **all**;
+**unseen** = no exact-frame match; and **unflagged** = neither exact nor similarity-flagged. P1–P7 are
+graded on *all*, as written. The seen-vs-unseen gap is reported as a real-data memorization measure.
+Unseen does not mean proven unseen: the same physical sign in a different frame passes the exact test.
+Per-sign flags: `results/v2-gtsdb-overlap/overlap.json`.
+
 ### 2.7 Predictions (to commit to RESULTS.md before any real or hybrid scene is scored)
 
 These are proposals to review. They get frozen in the commit that comes before the first scoring.
