@@ -1,0 +1,390 @@
+{
+  "top": {
+    "counts": {
+      "A": 6,
+      "B": 2,
+      "C": 6,
+      "D": 6
+    },
+    "sign": 8,
+    "n": 20
+  },
+  "control": {
+    "counts": {
+      "A": 1,
+      "B": 0,
+      "C": 4,
+      "D": 15
+    },
+    "sign": 1,
+    "n": 20
+  },
+  "p6_holds": false,
+  "labels_file": "results/v3a/p6_labels.json",
+  "labels_sha256": "259dc943a038efbd6b2dfdb41aead54e2a58bcb5d6ef7fc8ad8f4f838202888f",
+  "labels_commit": "6cc14de6f6d324302d6606dcb7e2f0672924f945",
+  "key_file": "outputs/eval/peak_empty-20261109-140021/p6_key.json",
+  "sheet_sha256": "e2238263bbfcf63455d75e149e2b35863f0fc10ce442c9923907d968f677a07b",
+  "tiles": [
+    {
+      "number": 1,
+      "row": 550,
+      "top": true,
+      "presence": 0.48429566621780396,
+      "photo_index": 275,
+      "stratum": "UNIFORM",
+      "label": "C"
+    },
+    {
+      "number": 2,
+      "row": 1175,
+      "top": false,
+      "presence": 0.0030906100291758776,
+      "photo_index": 587,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 3,
+      "row": 809,
+      "top": false,
+      "presence": 9.990582475438714e-05,
+      "photo_index": 404,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 4,
+      "row": 1196,
+      "top": false,
+      "presence": 0.002210675273090601,
+      "photo_index": 598,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 5,
+      "row": 344,
+      "top": true,
+      "presence": 0.6324824690818787,
+      "photo_index": 172,
+      "stratum": "UNIFORM",
+      "label": "C"
+    },
+    {
+      "number": 6,
+      "row": 634,
+      "top": true,
+      "presence": 0.2627716064453125,
+      "photo_index": 317,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 7,
+      "row": 253,
+      "top": true,
+      "presence": 0.45816275477409363,
+      "photo_index": 126,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 8,
+      "row": 577,
+      "top": true,
+      "presence": 0.5904861688613892,
+      "photo_index": 288,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 9,
+      "row": 545,
+      "top": false,
+      "presence": 0.0038729046937078238,
+      "photo_index": 272,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 10,
+      "row": 185,
+      "top": true,
+      "presence": 0.2637031078338623,
+      "photo_index": 92,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 11,
+      "row": 905,
+      "top": false,
+      "presence": 0.00013412872795015574,
+      "photo_index": 452,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 12,
+      "row": 521,
+      "top": true,
+      "presence": 0.9259851574897766,
+      "photo_index": 260,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 13,
+      "row": 1101,
+      "top": true,
+      "presence": 0.5142822861671448,
+      "photo_index": 550,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 14,
+      "row": 221,
+      "top": true,
+      "presence": 0.44823122024536133,
+      "photo_index": 110,
+      "stratum": "BAND",
+      "label": "C"
+    },
+    {
+      "number": 15,
+      "row": 538,
+      "top": false,
+      "presence": 0.007496039383113384,
+      "photo_index": 269,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 16,
+      "row": 225,
+      "top": false,
+      "presence": 0.002154317917302251,
+      "photo_index": 112,
+      "stratum": "BAND",
+      "label": "C"
+    },
+    {
+      "number": 17,
+      "row": 785,
+      "top": false,
+      "presence": 4.199515387881547e-05,
+      "photo_index": 392,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 18,
+      "row": 1122,
+      "top": false,
+      "presence": 4.0675487980479375e-05,
+      "photo_index": 561,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 19,
+      "row": 217,
+      "top": true,
+      "presence": 0.26350152492523193,
+      "photo_index": 108,
+      "stratum": "BAND",
+      "label": "C"
+    },
+    {
+      "number": 20,
+      "row": 512,
+      "top": false,
+      "presence": 4.758661816595122e-05,
+      "photo_index": 256,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 21,
+      "row": 51,
+      "top": true,
+      "presence": 0.7336069345474243,
+      "photo_index": 25,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 22,
+      "row": 642,
+      "top": false,
+      "presence": 5.09822439198615e-06,
+      "photo_index": 321,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 23,
+      "row": 617,
+      "top": false,
+      "presence": 0.0011882800608873367,
+      "photo_index": 308,
+      "stratum": "BAND",
+      "label": "C"
+    },
+    {
+      "number": 24,
+      "row": 289,
+      "top": true,
+      "presence": 0.48674336075782776,
+      "photo_index": 144,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 25,
+      "row": 194,
+      "top": true,
+      "presence": 0.6795235276222229,
+      "photo_index": 97,
+      "stratum": "UNIFORM",
+      "label": "C"
+    },
+    {
+      "number": 26,
+      "row": 400,
+      "top": false,
+      "presence": 0.0008512150379829109,
+      "photo_index": 200,
+      "stratum": "UNIFORM",
+      "label": "C"
+    },
+    {
+      "number": 27,
+      "row": 442,
+      "top": false,
+      "presence": 0.0590071938931942,
+      "photo_index": 221,
+      "stratum": "UNIFORM",
+      "label": "C"
+    },
+    {
+      "number": 28,
+      "row": 1064,
+      "top": true,
+      "presence": 0.27346116304397583,
+      "photo_index": 532,
+      "stratum": "UNIFORM",
+      "label": "C"
+    },
+    {
+      "number": 29,
+      "row": 311,
+      "top": true,
+      "presence": 0.4690221846103668,
+      "photo_index": 155,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 30,
+      "row": 680,
+      "top": true,
+      "presence": 0.5096406936645508,
+      "photo_index": 340,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 31,
+      "row": 621,
+      "top": true,
+      "presence": 0.6327871084213257,
+      "photo_index": 310,
+      "stratum": "BAND",
+      "label": "A"
+    },
+    {
+      "number": 32,
+      "row": 411,
+      "top": false,
+      "presence": 0.0006883849855512381,
+      "photo_index": 205,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 33,
+      "row": 529,
+      "top": false,
+      "presence": 3.834105154965073e-05,
+      "photo_index": 264,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 34,
+      "row": 759,
+      "top": false,
+      "presence": 3.61835554940626e-05,
+      "photo_index": 379,
+      "stratum": "BAND",
+      "label": "D"
+    },
+    {
+      "number": 35,
+      "row": 70,
+      "top": true,
+      "presence": 0.24353618919849396,
+      "photo_index": 35,
+      "stratum": "UNIFORM",
+      "label": "B"
+    },
+    {
+      "number": 36,
+      "row": 61,
+      "top": true,
+      "presence": 0.4180380702018738,
+      "photo_index": 30,
+      "stratum": "BAND",
+      "label": "B"
+    },
+    {
+      "number": 37,
+      "row": 818,
+      "top": false,
+      "presence": 1.4547223145200405e-05,
+      "photo_index": 409,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 38,
+      "row": 340,
+      "top": true,
+      "presence": 0.2967189848423004,
+      "photo_index": 170,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 39,
+      "row": 148,
+      "top": false,
+      "presence": 7.502617791033117e-06,
+      "photo_index": 74,
+      "stratum": "UNIFORM",
+      "label": "D"
+    },
+    {
+      "number": 40,
+      "row": 449,
+      "top": false,
+      "presence": 0.00036497850669547915,
+      "photo_index": 224,
+      "stratum": "BAND",
+      "label": "D"
+    }
+  ]
+}
