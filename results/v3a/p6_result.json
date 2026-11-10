@@ -22,7 +22,7 @@
   "p6_holds": false,
   "labels_file": "results/v3a/p6_labels.json",
   "labels_sha256": "259dc943a038efbd6b2dfdb41aead54e2a58bcb5d6ef7fc8ad8f4f838202888f",
-  "labels_commit": "6cc14de6f6d324302d6606dcb7e2f0672924f945",
+  "labels_commit": "17e24b9931ab7988e6228bd594d43e7c040e9385",
   "key_file": "outputs/eval/peak_empty-20261109-140021/p6_key.json",
   "sheet_sha256": "e2238263bbfcf63455d75e149e2b35863f0fc10ce442c9923907d968f677a07b",
   "tiles": [

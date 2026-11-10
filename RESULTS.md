@@ -9,6 +9,9 @@ One section per version, newest first. Rules for every entry:
 
 Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live in `results/<version>/`.
 
+Commit hashes changed on 2026-11-10, when attribution trailers were removed from every commit message.
+File contents and commit dates are unchanged, and every hash cited here was updated to its new value.
+
 ---
 
 ## v3a: saying "no sign here" — pre-registered 2026-11-09
@@ -113,7 +116,7 @@ v3a's own seeds spread widely, because their τ differs:
 A lower τ finds more real signs and fires on more decoys, which is one trade-off curve.
 
 **P6 contact sheet** (`results/v3a/p6_sheet.png`). I labeled it from the image alone and committed the
-labels (6cc14de) before `scripts/p6_join.py` read the key. Results are in `results/v3a/p6_result.json`.
+labels (17e24b9) before `scripts/p6_join.py` read the key. Results are in `results/v3a/p6_result.json`.
 
 | Group | A: sign outside the 43 classes | B: sign of the 43 classes | C: sign-like | D: nothing sign-like |
 |---|---|---|---|---|
@@ -503,7 +506,7 @@ test, once. Otherwise this entry records a negative result and v1.5 stays the he
 | Training time | ~40 min per run on MPS (v1.5: ~34); epochs 108–138 s vs ~100 s |
 | Checkpoints | B: `best.pt` from `peak_fresh_aug-20261108-024220`, epoch 19 of 20. A: `best.pt` from `peak_fresh-20261108-032133`, epoch 19 of 20 |
 | Configs | `configs/peak_fresh_aug.yaml` (B), `configs/peak_fresh.yaml` (A) |
-| Code | commit `6403e61` |
+| Code | commit `0277d4d` |
 
 ### Predictions vs. outcome
 
@@ -616,7 +619,7 @@ Everything else is identical, down to the initial weights (same seed, same param
 | Training | identical to v1: 20 epochs, same optimizer, schedule, seed and data; ~34 min on MPS |
 | Checkpoint | `best.pt` from run `peak-20261105-195425`, epoch 14 of 20 |
 | Config | `configs/peak.yaml` (differs from `configs/baseline.yaml` only in `model.arch` and `run_name`) |
-| Code | commit `c167e58` (the run used that code, uncommitted at the time) |
+| Code | commit `2c71d0d` (the run used that code, uncommitted at the time) |
 
 ### Predictions vs. outcome
 
@@ -722,7 +725,7 @@ appear, e.g. stop → no vehicles (both round-ish with a red border).
 | Training | 20 epochs, AdamW lr 0.001, weight decay 0.0001, cosine decay, batch 64, Apple MPS, ~32 min |
 | Checkpoint | `best.pt` from run `baseline-20261103-135333`, epoch 19 of 20 |
 | Config | `configs/baseline.yaml` |
-| Code | commit `c1b06b2` (the run itself used that code minus a logging-only `.detach()` fix) |
+| Code | commit `722c65a` (the run itself used that code minus a logging-only `.detach()` fix) |
 | Test data | `test.npz` SHA-256 `5b12263894a8848abf833d9d8f7c7b12a05ab3e6d4ca915be5ba5f741b30589a` |
 | Val data | `val.npz` SHA-256 `86879aff4e9c4615abaad1f4dfc55dc689b262238470e88d5f8c7f647c22a747` |
 

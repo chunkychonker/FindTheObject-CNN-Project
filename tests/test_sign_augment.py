@@ -10,7 +10,7 @@ from findobject.data.synth import SynthConfig, make_scene
 STRONG = SignAugment(max_rotation_deg=30, max_perspective=0.1, contrast=(0.6, 1.4), saturation=(0.6, 1.4))
 
 # make_scene with the default (no augmentation) SynthConfig must give exactly what it gave before
-# sign augmentation existed. Computed by running the pre-augmentation synth.py (commit f34db5f) on _digest's
+# sign augmentation existed. Computed by running the pre-augmentation synth.py (commit 894334e) on _digest's
 # inputs. Stored val/test regenerate byte-identically only while this holds.
 PRE_AUGMENT_DIGEST = "d956770536dd0ec636a1a9908e6bc8439d4ee04defc86fad890b4931039ec254"
 
