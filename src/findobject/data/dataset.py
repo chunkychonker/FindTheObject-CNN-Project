@@ -1,4 +1,4 @@
-"""Serve one generated split (data/processed/{train,test}.npz) as PyTorch tensors."""
+"""Serve stored scenes (data/processed/*.npz) as PyTorch tensors."""
 
 from pathlib import Path
 from typing import NamedTuple
@@ -12,17 +12,25 @@ from findobject.data.gtsrb import NUM_CLASSES
 
 _KEYS = ("images", "class_ids", "boxes", "heatmaps")
 
+IGNORE_CLASS = -100  # class_id of a scene with no sign; equals torch cross_entropy's default ignore_index
+
 
 class Sample(NamedTuple):
     """One scene. DataLoader's default collate batches each field (leading dim B)."""
 
     image: Tensor  # float32 [3, S, S] in [0, 1]
     heatmap: Tensor  # float32 [1, H, H] in [0, 1]
-    class_id: Tensor  # int64 scalar in [0, NUM_CLASSES)
+    class_id: Tensor  # int64 scalar in [0, NUM_CLASSES), or IGNORE_CLASS for a scene with no sign
     box: Tensor  # int64 [4] x1, y1, x2, y2 in scene px; x2/y2 exclusive
 
     def to(self, device: torch.device) -> "Sample":
         return Sample(*(t.to(device) for t in self))
+
+
+def has_sign(class_id: Tensor) -> Tensor:
+    """Bool tensor of class_id's shape: True where the scene holds a sign. The only test for "has a sign",
+    so it can never disagree with the stored class id."""
+    return class_id != IGNORE_CLASS
 
 
 class SignScenes(Dataset[Sample]):
@@ -60,6 +68,41 @@ class SignScenes(Dataset[Sample]):
             heatmap=torch.from_numpy(self._heatmaps[i]).float().unsqueeze(0),
             class_id=torch.tensor(self._class_ids[i], dtype=torch.int64),
             box=torch.from_numpy(self._boxes[i]).long(),
+        )
+
+
+class EmptyScenes(Dataset[Sample]):
+    """Stored scenes that hold no sign (v3a: *_empty.npz, val_decoy_*.npz, real_empty_*.npz), served in
+    SignScenes' Sample format: class_id IGNORE_CLASS, an all-zero heatmap, box (0, 0, 0, 0). Only the
+    images and heatmap_size arrays are read; the files' other arrays are metadata for reports and checks.
+    """
+
+    def __init__(self, npz_path: Path) -> None:
+        """Raises FileNotFoundError if npz_path does not exist, KeyError if images or heatmap_size is
+        missing, ValueError if images are not uint8 [N, S, S, 3] or S is not a multiple of heatmap_size."""
+        with np.load(npz_path) as d:
+            missing = [k for k in ("images", "heatmap_size") if k not in d]
+            if missing:
+                raise KeyError(f"{npz_path}: missing arrays {missing}")
+            images, h = d["images"], int(d["heatmap_size"])
+        if images.dtype != np.uint8 or images.ndim != 4 or images.shape[3] != 3 or images.shape[1] != images.shape[2]:
+            raise ValueError(f"{npz_path}: images must be uint8 [N, S, S, 3], got {images.dtype} {images.shape}")
+        if h < 1 or images.shape[1] % h:
+            raise ValueError(f"{npz_path}: scene size {images.shape[1]} is not a multiple of heatmap size {h}")
+        self._images = images
+        self._heatmap_size = h
+
+    def __len__(self) -> int:
+        return len(self._images)
+
+    def __getitem__(self, i: int) -> Sample:
+        """Raises IndexError if i is out of range. Returned tensors never alias the stored arrays."""
+        h = self._heatmap_size
+        return Sample(
+            image=torch.from_numpy(self._images[i]).permute(2, 0, 1).float().div_(255),
+            heatmap=torch.zeros(1, h, h),
+            class_id=torch.tensor(IGNORE_CLASS, dtype=torch.int64),
+            box=torch.zeros(4, dtype=torch.int64),
         )
 
 

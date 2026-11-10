@@ -69,6 +69,25 @@ def test_augment_with_fixed_scenes_rejected(tmp_path):
         epoch_datasets({**_tiny_train_npz(tmp_path), "train_augment": AUG}, seed=0)
 
 
+def test_empties_with_fixed_scenes_rejected(tmp_path):
+    with pytest.raises(ValueError, match="n_train_empty"):
+        epoch_datasets({**_tiny_train_npz(tmp_path), "n_train_empty": 1}, seed=0)
+
+
+@pytest.mark.parametrize("n_empty", [-1, 20000, 25000, 1.5, True, "100"])
+def test_bad_n_train_empty_rejected_before_reading_any_data(n_empty):
+    cfg = {**REAL, "raw_dir": "/nonexistent", "train_scenes": "fresh", "n_train_empty": n_empty}
+    with pytest.raises(ValueError, match="n_train_empty"):
+        epoch_datasets(cfg, seed=0)
+
+
+@needs_raw
+def test_fresh_with_empties_keeps_the_epoch_length():
+    for_epoch = epoch_datasets({**REAL, "train_scenes": "fresh", "train_augment": AUG, "n_train_empty": 4000}, seed=0)
+    e1 = for_epoch(1)
+    assert len(e1) == 20000 and e1[15999].class_id.item() != -100 and e1[16000].class_id.item() == -100
+
+
 @needs_raw
 def test_fresh_gives_n_train_new_scenes_per_epoch():
     for_epoch = epoch_datasets({**REAL, "train_scenes": "fresh", "train_augment": AUG}, seed=0)

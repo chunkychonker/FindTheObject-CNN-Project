@@ -5,8 +5,10 @@ import torch
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from findobject.data.dataset import Sample
-from findobject.models.baseline import HEATMAP_PRIOR, BaselineCNN
+from torch import nn
+
+from findobject.data.dataset import IGNORE_CLASS, Sample
+from findobject.models.baseline import HEATMAP_PRIOR, BaselineCNN, ModelOutput
 from findobject.training.checkpoint import load_checkpoint_info, load_model, save_checkpoint
 from findobject.training.config import TrainConfig
 from findobject.training.epoch import train_one_epoch
@@ -79,6 +81,54 @@ def test_nan_loss_stops_training():
         train_one_epoch(model, [_batch(torch.full((2, 3, 32, 32), float("nan")))], optimizer, scheduler,
                         torch.device("cpu"), 0.1, lambda parts: None)
     assert all(torch.equal(a, b) for a, b in zip(before, model.parameters()))  # bad batch never applied
+
+
+class _FixedModel(nn.Module):
+    """Always predicts class 0 and puts the heatmap peak in cell (0, 0), centered at scene px (2, 2)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.w = nn.Parameter(torch.zeros(()))  # something for the optimizer to step
+
+    def forward(self, image: torch.Tensor) -> ModelOutput:
+        b = len(image)
+        heat = torch.zeros(b, 1, 8, 8)
+        heat[:, 0, 0, 0] = 5.0
+        logits = torch.zeros(b, 43)
+        logits[:, 0] = 5.0
+        return ModelOutput(heat + 0 * self.w, logits + 0 * self.w)
+
+
+def test_epoch_accuracies_count_sign_scenes_only():
+    # Sign rows: row 0 right on both (class 0, box holds the peak), row 1 wrong on both. Empties can never
+    # be right, so counting them would give 1/4 instead of 1/2.
+    batch = Sample(torch.rand(4, 3, 32, 32), torch.zeros(4, 1, 8, 8), torch.tensor([0, 1, IGNORE_CLASS, IGNORE_CLASS]),
+                   torch.tensor([[0, 0, 8, 8], [16, 16, 32, 32], [0, 0, 0, 0], [0, 0, 0, 0]]))
+    model = _FixedModel()
+    optimizer, scheduler = _opt(model)
+    stats = train_one_epoch(model, [batch], optimizer, scheduler, torch.device("cpu"), 0.1, lambda parts: None)
+    assert stats.class_acc == 0.5 and stats.pointing_acc == 0.5
+
+
+def test_all_empty_batch_adds_no_rows_to_the_accuracies():
+    sign_batch = Sample(torch.rand(2, 3, 32, 32), torch.zeros(2, 1, 8, 8), torch.tensor([0, 1]),
+                        torch.tensor([[0, 0, 8, 8], [16, 16, 32, 32]]))
+    empty_batch = Sample(torch.rand(3, 3, 32, 32), torch.zeros(3, 1, 8, 8), torch.tensor([IGNORE_CLASS] * 3),
+                         torch.zeros(3, 4, dtype=torch.int64))
+    model = _FixedModel()
+    optimizer, scheduler = _opt(model)
+    stats = train_one_epoch(model, [empty_batch, sign_batch], optimizer, scheduler, torch.device("cpu"), 0.1,
+                            lambda parts: None)
+    assert stats.class_acc == 0.5 and stats.pointing_acc == 0.5
+
+
+def test_epoch_with_no_sign_scene_raises():
+    batch = Sample(torch.rand(2, 3, 32, 32), torch.zeros(2, 1, 8, 8), torch.tensor([IGNORE_CLASS] * 2),
+                   torch.zeros(2, 4, dtype=torch.int64))
+    model = _FixedModel()
+    optimizer, scheduler = _opt(model)
+    with pytest.raises(ValueError):
+        train_one_epoch(model, [batch], optimizer, scheduler, torch.device("cpu"), 0.1, lambda parts: None)
 
 
 # --- checkpoint ---

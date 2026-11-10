@@ -22,6 +22,7 @@ Box = tuple[int, int, int, int]  # x1, y1, x2, y2; x2/y2 exclusive
 
 class Skip(Enum):
     OTHER_SIGN_IN_VIEW = "other_sign_in_view"
+    NO_CLEAR_SPOT = "no_clear_spot"  # negative window (real_negatives.py): every try touched a labeled sign
 
 
 @dataclass(frozen=True)

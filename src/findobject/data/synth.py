@@ -82,7 +82,7 @@ def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg
     sign_augment existed. Does not mutate the input images. Raises whatever PIL raises on unreadable image data.
     """
     s = cfg.scene_size
-    canvas = _random_square_crop(bg.convert("RGB"), rng).resize((s, s), Image.BILINEAR)
+    canvas = _canvas(bg, rng, cfg)
 
     sign = sign.convert("RGB")
     long_side = int(rng.integers(cfg.sign_min, cfg.sign_max + 1))
@@ -102,13 +102,34 @@ def make_scene(sign: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg
     else:
         box = _paste_augmented(canvas, sign, rng, cfg.sign_augment)
 
+    return Scene(image=_finish(canvas, rng, cfg), box=box, heatmap=box_heatmap(box, cfg))
+
+
+def make_empty_scene(bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Scene:
+    """A scene with no sign: the same crop, resize, blur and noise as make_scene, with no paste.
+
+    Box (0, 0, 0, 0) and an all-zero heatmap. Its crop draws come first, as in make_scene, so with the
+    same rng state it crops the same region of bg that make_scene would paste onto. Does not mutate bg.
+    Raises whatever PIL raises on unreadable image data.
+    """
+    canvas = _canvas(bg, rng, cfg)
+    heatmap = np.zeros((cfg.heatmap_size, cfg.heatmap_size), np.float32)
+    return Scene(image=_finish(canvas, rng, cfg), box=(0, 0, 0, 0), heatmap=heatmap)
+
+
+def _canvas(bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Image.Image:
+    """First half of every scene's background pipeline: a random square crop of bg, resized to the scene."""
+    s = cfg.scene_size
+    return _random_square_crop(bg.convert("RGB"), rng).resize((s, s), Image.BILINEAR)
+
+
+def _finish(canvas: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> np.ndarray:
+    """Second half, after any paste: optional blur, then Gaussian noise, as uint8 [S, S, 3]."""
     if rng.random() < cfg.blur_prob:
         canvas = canvas.filter(ImageFilter.GaussianBlur(rng.uniform(0, cfg.blur_max_radius)))
-
     image = np.asarray(canvas, dtype=np.float32)
     image = image + rng.normal(0.0, rng.uniform(0, cfg.noise_max_std), image.shape)
-    image = np.clip(image, 0, 255).astype(np.uint8)
-    return Scene(image=image, box=box, heatmap=box_heatmap(box, cfg))
+    return np.clip(image, 0, 255).astype(np.uint8)
 
 
 def box_heatmap(box: tuple[int, int, int, int], cfg: SynthConfig) -> np.ndarray:
