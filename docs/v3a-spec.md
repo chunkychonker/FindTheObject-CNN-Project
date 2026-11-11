@@ -1,6 +1,6 @@
 # v3a spec: teach the model to say "no sign here"
 
-Status: **draft 2, for review.** Nothing below is implemented. Draft 1 (fbe435e) was reviewed by a fresh
+Status: **draft 2, for review.** Nothing below is implemented. Draft 1 (ba4c3c5) was reviewed by a fresh
 session. §7 lists what changed and why. Predictions (§2.8) are frozen in RESULTS.md as the **first**
 step after approval, before any code is written and before any model's presence score exists.
 
