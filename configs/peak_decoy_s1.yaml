@@ -1,0 +1,45 @@
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  seed: 0
+  n_train: 20000
+  n_val: 5000
+  n_test: 5000
+  test_background_every: 5   # COCO backgrounds (by id): index % 5 == 0 -> test, == 1 -> val, rest -> train
+  holdout_fraction: 0.1      # per class, this fraction of GTSRB training tracks (min 1) goes to val
+  train_scenes: fresh        # fixed (train.npz every epoch) | fresh (n_train new scenes per epoch)
+  n_train_empty: 0           # v3a.1: no plain empties; their 4,000 slots are decoys
+  n_train_decoy: 4000        # v3a.1: scenes 16,000-19,999 of each epoch are decoys (sign scene i with its sign swapped for a background patch)
+  train_augment:              # training signs only; val/test never see this (data/sign_augment.py)
+    max_rotation_deg: 10       # uniform in [-10, +10]
+    max_perspective: 0.08      # each corner moves up to 8% of the sign's longer side
+    contrast: [0.6, 1.4]
+    saturation: [0.6, 1.4]     # no hue shifts: color carries meaning
+    occlusion_prob: 0.3        # background patch over 10-25% of the sign's box
+    occlusion_area: [0.10, 0.25]
+  synth:
+    scene_size: 128
+    heatmap_size: 32
+    sign_min: 16
+    sign_max: 48
+    brightness: [0.6, 1.4]
+    blur_prob: 0.5
+    blur_max_radius: 1.0
+    noise_max_std: 8.0
+    heatmap_sigma: 1.0
+
+model:
+  arch: peak                 # baseline | peak (models/factory.py)
+
+train:
+  run_name: peak_decoy_s1
+  epochs: 20
+  batch_size: 64
+  lr: 0.001                  # write decimals, not 1e-3: PyYAML reads 1e-3 as a string
+  weight_decay: 0.0001
+  heatmap_loss_weight: 0.1   # total = class_loss + this * heatmap_loss (heatmap loss spans ~39 -> ~10)
+  seed: 1                    # v1.6 seed-variance rerun; data.seed stays 0
+  device: auto               # auto | mps | cpu
+  log_every_steps: 50
+  histogram_every_epochs: 5
+  num_workers: 4             # generating scenes is CPU work; 4 processes keep up with the GPU
