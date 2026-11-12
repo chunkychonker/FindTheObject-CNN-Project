@@ -11,11 +11,13 @@ from torch.utils.data import DataLoader
 
 from findobject.data.data_config import train_synth_config
 from findobject.data.dataset import IGNORE_CLASS, has_sign
+from findobject.data.decoy_patch import PATCH_STREAM, draw_patch, eligible_patch_sources
 from findobject.data.fresh import FreshScenes
-from findobject.data.gtsrb import SignSample
+from findobject.data.gtsrb import SignSample, load_sign
 from findobject.data.sign_augment import SignAugment
 from findobject.data.splits import SceneSource
-from findobject.data.synth import SynthConfig
+from findobject.data.synth import SynthConfig, make_decoy_scene
+from findobject.data.synth_negatives import roi_size
 
 CFG = SynthConfig(sign_augment=SignAugment(max_rotation_deg=10, occlusion_prob=0.5))
 
@@ -141,3 +143,85 @@ def test_empty_scene_has_the_background_its_sign_scene_was_pasted_onto(source):
 def test_rejects_n_empty_outside_0_to_n(source, n_empty):
     with pytest.raises(ValueError):
         FreshScenes(source, CFG, 10, 0, 1, n_empty=n_empty)
+
+
+# --- v3a.1: decoys sit between the sign scenes and the empties ---
+
+def _patches(source):
+    with Image.open(source.backgrounds[0]) as bg:
+        size = bg.size
+    return eligible_patch_sources([size] * len(source.backgrounds), (40, 44))  # fixture ROIs are 40x44
+
+
+def test_decoys_leave_sign_scenes_and_empties_unchanged(source):
+    ps = _patches(source)
+    plain = FreshScenes(source, CFG, 10, seed=0, epoch=1, n_empty=3)
+    mixed = FreshScenes(source, CFG, 10, seed=0, epoch=1, n_empty=3, n_decoy=4, patch_sources=ps)
+    for i in (*range(3), *range(7, 10)):  # sign scenes 0-2, empties 7-9
+        assert _same(plain[i], mixed[i])
+    assert not torch.equal(plain[3].image, mixed[3].image)  # scene 3 is now a decoy
+
+
+def test_decoy_targets_are_an_empty_scenes(source):
+    ds = FreshScenes(source, CFG, 6, seed=0, epoch=1, n_decoy=3, patch_sources=_patches(source))
+    for i in range(3, 6):
+        s = ds[i]
+        assert s.class_id.item() == IGNORE_CLASS and not has_sign(s.class_id)
+        assert s.heatmap.shape == (1, 32, 32) and s.heatmap.abs().sum().item() == 0
+        assert s.box.tolist() == [0, 0, 0, 0]
+    assert has_sign(ds[2].class_id)
+
+
+@pytest.mark.parametrize("cfg", [CFG, SynthConfig()], ids=["augmented", "plain"])
+def test_decoy_is_its_sign_scene_with_only_the_content_swapped(source, cfg):
+    # No blur or noise: outside sign i's box, decoy i must be pixel-identical to sign scene i (same crop,
+    # same paste geometry, so the same box); inside, the patch's pixels replace the sign's.
+    cfg = dataclasses.replace(cfg, blur_prob=0.0, noise_max_std=0.0)
+    for i in range(5, 10):
+        sign = FreshScenes(source, cfg, 10, seed=2, epoch=3)[i]
+        decoy = FreshScenes(source, cfg, 10, seed=2, epoch=3, n_decoy=5, patch_sources=_patches(source))[i]
+        x1, y1, x2, y2 = sign.box.tolist()
+        outside = torch.ones(sign.image.shape[1:], dtype=torch.bool)
+        outside[y1:y2, x1:x2] = False
+        assert torch.equal(sign.image[:, outside], decoy.image[:, outside])
+        assert not torch.equal(sign.image[:, ~outside], decoy.image[:, ~outside])
+
+
+def test_decoy_follows_the_documented_draws(source):
+    # Contract: scene RNG draws sign index, background index, then make_scene's draws; the patch RNG
+    # [seed, epoch, i, PATCH_STREAM] draws source and corner; the patch is cut at the sign's ROI size.
+    ps, seed, epoch, i = _patches(source), 4, 2, 7
+    got = FreshScenes(source, CFG, 8, seed, epoch, n_decoy=2, patch_sources=ps)[i]
+    rng = np.random.default_rng([seed, epoch, i])
+    sign = source.signs[rng.integers(len(source.signs))]
+    bg_index = int(rng.integers(len(source.backgrounds)))
+    src_index, (x, y) = draw_patch(ps, bg_index, roi_size(sign), np.random.default_rng([seed, epoch, i, PATCH_STREAM]))
+    assert src_index != bg_index
+    w, h = roi_size(sign)
+    with Image.open(source.backgrounds[src_index]) as src:
+        patch = src.convert("RGB").crop((x, y, x + w, y + h))
+    assert patch.size == load_sign(sign).size
+    with Image.open(source.backgrounds[bg_index]) as bg:
+        want = make_decoy_scene(patch, bg, rng, CFG)
+    assert torch.equal(got.image, torch.from_numpy(want.image).permute(2, 0, 1).float().div_(255))
+
+
+def test_decoys_identical_with_zero_or_several_workers(source):
+    ds = FreshScenes(source, CFG, 8, seed=0, epoch=1, n_empty=2, n_decoy=4, patch_sources=_patches(source))
+    serial = list(DataLoader(ds, batch_size=4, num_workers=0))
+    parallel = list(DataLoader(ds, batch_size=4, num_workers=2))
+    assert all(_same(a, b) for a, b in zip(serial, parallel))
+
+
+@pytest.mark.parametrize("n_empty,n_decoy", [(0, -1), (0, 10), (4, 6), (9, 1)])
+def test_rejects_bad_decoy_counts(source, n_empty, n_decoy):
+    with pytest.raises(ValueError):
+        FreshScenes(source, CFG, 10, 0, 1, n_empty=n_empty, n_decoy=n_decoy, patch_sources=_patches(source))
+
+
+def test_decoys_need_patch_sources_that_match_the_source(source):
+    with pytest.raises(ValueError, match="patch_sources"):
+        FreshScenes(source, CFG, 10, 0, 1, n_decoy=2)
+    too_many = eligible_patch_sources([(260, 200)] * (len(source.backgrounds) + 1), (40, 44))
+    with pytest.raises(ValueError, match="patch_sources"):
+        FreshScenes(source, CFG, 10, 0, 1, n_decoy=2, patch_sources=too_many)
