@@ -11,6 +11,60 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
+## v3a.1: decoys as training negatives — pre-registered 2026-11-12
+
+### Why
+
+v3a scores pasted things higher than real ones. A background patch pasted where a sign would go sets
+off a false alarm 9–19% of the time. A real sign's median presence is 0.11–0.12 below its pasted twin.
+Every pasted thing in training was a sign, so the paste edge may have become evidence of a sign.
+v3a.1 trains on pasted non-signs (decoys) to test that. Full spec:
+[docs/v3a1-spec.md](docs/v3a1-spec.md) (draft 2, approved).
+
+Decoys can teach that an edge is not *enough* for "sign" (D2). They cannot teach that an edge is not
+*needed*, because every training sign still has one. D1 tests "needed". So a D2 pass with a D1 fail
+points to a seamless paste or real-sign training next, not to a different cause.
+
+### Setup (fixed before any code was written)
+
+- **v3a.1 training:** v3a's config, with the 4,000 empty slots of each epoch replaced by 4,000 decoys.
+  - Decoy i is sign scene i with the sign's pixels replaced by a same-size patch from another train
+    background, through the training paste.
+  - Its target is the same as an empty's: all-zero heatmap, no class.
+  - The patch comes from its own RNG stream, and only from backgrounds big enough to cut it.
+  - Seeds 0, 1 and 2.
+- **Baseline:** v3a, not retrained: `peak_empty-20261109-140021`, `peak_empty_s1-20261109-144931` and
+  `peak_empty_s2-20261109-153419`. v1.5b is reported alongside.
+- **τ, splits and intervals:** unchanged from v3a.
+- **Seam effect:** the median presence difference, hybrid minus real, over the 645 real_dev signs. Its
+  interval comes from the photo-clustered bootstrap. Hybrids are smaller than their real twins (median
+  32 vs 40 px), and the gap grows as the hybrid gets smaller (v3a s0: 0.057 / 0.088 / 0.158). So the
+  seam report also gives:
+  - the gap per relative-size group;
+  - the share of pairs where the hybrid scores higher;
+  - median real and median hybrid presence separately.
+- **Grading:** every prediction is graded on v3a.1 seed 0 against v3a seed 0 unless its row says
+  otherwise. Test is scored once per seed, after the dev analysis is committed.
+
+### Predictions (frozen before any code; copied from spec §2.5)
+
+| # | Prediction | Measured on |
+|---|---|---|
+| D1 | The seam effect shrinks, because real signs rise. Seed 0's median presence gap (hybrid − real) is ≤ 0.06 (v3a: 0.119), all three seeds are below v3a's lowest (0.113), and seed 0's median real presence is above v3a's (0.755). Guess: gap 0.05 | real_dev vs hybrid_dev |
+| D2 | Decoy rejection carries over to the unseen plain edge: val_decoy_plain false alarms at τ ≤ 3% (v3a: 9.0%). val_decoy_aug is reported, not graded | val decoys |
+| D3 | More real signs found at τ: the 3-seed mean real_dev found is ≥ 95% (v3a: 92.8%) | real_dev, seeds 0–2 |
+| D4 | Real separation is unchanged: the paired 95% interval of ΔAUROC (v3a.1 − v3a) lies inside ±0.003 | real_dev |
+| D5 | No cost on the one-sign task: seed 0 test joint ≥ 97.28% and 3-seed mean ≥ 97.09% (the P3 bars) | test, seeds 0–2 |
+
+Reported but not graded:
+- the full seam report;
+- found at a 1% real_dev false-alarm point (v3a s0: 94.7%);
+- found per native-size bucket;
+- val_decoy_aug false alarms;
+- real_test.
+
+---
+
 ## v3a: saying "no sign here" — pre-registered 2026-11-09
 
 ### Why
