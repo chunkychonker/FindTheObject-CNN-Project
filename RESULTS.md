@@ -189,6 +189,38 @@ val decoys no longer decide where empties and signs separate, but I have not che
   that the model now reads sign content (spec §2.1).
 - One training recipe and one decoy share (all 4,000 slots); no mix of empties and decoys.
 
+### Test (each split scored once per seed, after the dev analysis above was committed)
+
+| v3a.1 seed | τ | test AUROC | test FA at τ | test found | **test joint** | real_test AUROC | real_test FA | real_test found | real said yes vs hybrid |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.484 | 0.9982 [0.9974, 0.9989] | 0.70% (35/5000) [0.50, 0.97] | 96.46% | **97.30%** [96.81, 97.71] | 0.9976 [0.9942, 0.9999] | 3/600 | 96.19% [93.91, 98.25] | 97.6% vs 99.7% (p = 0.03) |
+| 1 | 0.562 | 0.9983 | 0.66% (33/5000) | 96.48% | **97.68%** | 0.9972 | 2/600 | 95.16% | 95.2% vs 100.0% (p = 1e-4) |
+| 2 | 0.529 | 0.9982 | 0.66% (33/5000) | 96.50% | **97.34%** | 0.9981 | 3/600 | 94.81% | 96.2% vs 99.7% (p = 0.006) |
+
+3-seed mean test joint: **97.44%** (v3a: 97.67%).
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| D5 | seed 0 test joint ≥ 97.28%, 3-seed mean ≥ 97.09% | 97.30% and 97.44% | ✓ |
+
+**Final tally: 3 of 5** (D2, D4, D5). The three that held say that decoys teach the model to reject a
+pasted edge, and that this costs nothing measurable. The two that failed (D1, D3) are the ones that
+expected real signs to benefit.
+
+- **D5 passed narrowly.** Seed 0 cleared its bar by 0.02 points, and its interval (96.81–97.71) spans
+  the bar. The 3-seed mean cleared it by 0.35.
+- **Synthetic joint is a little lower than v3a's**: 97.44% against 97.67% on the 3-seed mean, with two
+  seeds lower and one higher. On dev, val joint also fell (98.30% against 98.41%). These are separate
+  runs, not paired, so I cannot say whether the difference is real. If it is, it is a small cost.
+- **Test false alarms at τ fell**: 0.67% against v3a's 1.09% on the 3-seed mean. The synthetic τ still
+  carries over to test.
+- **Real test repeats dev.**
+  - Real found is the same in both models: 95.39% on the 3-seed mean.
+  - Real FA at τ is 2–3 per 600, against v3a's 2–7.
+  - The median presence gap, hybrid minus real, is 0.101–0.110, against v3a's 0.114–0.117. That is on
+    289 pairs with no interval and was not predicted, so I don't read it as a fix.
+  - Real signs still get "yes" less often than their hybrid twins, by 2–5 points.
+
 ---
 
 ## v3a: saying "no sign here" — pre-registered 2026-11-09
