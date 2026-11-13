@@ -12,3 +12,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["notebooks: executes every notebook top to bottom (needs datasets and trained runs; minutes)"]
+addopts = "-m 'not notebooks'"  # opt in with: pytest -m notebooks
