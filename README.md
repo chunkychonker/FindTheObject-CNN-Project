@@ -3,6 +3,9 @@
 A small CNN that finds a traffic sign in an image and names it: one output is a 32×32 heatmap of where the
 sign is, the other is which of the 43 GTSRB sign classes it is. See [DETAILS.md](DETAILS.md) for the plan.
 
+**Start here:** [notebooks/](notebooks/README.md) walks through the whole project in nine Jupyter notebooks,
+from making the data to running the model on your own photos. Every step can be run from them.
+
 ## Results
 
 Scored once on a held-out test set: 5,000 synthetic scenes, or for v2, real road-photo windows. Full

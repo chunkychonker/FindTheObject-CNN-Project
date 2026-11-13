@@ -117,6 +117,15 @@ def make_empty_scene(bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig
     return Scene(image=_finish(canvas, rng, cfg), box=(0, 0, 0, 0), heatmap=heatmap)
 
 
+def make_decoy_scene(patch: Image.Image, bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Scene:
+    """make_scene with `patch` in place of a sign, then the sign's targets dropped: box (0, 0, 0, 0) and an
+    all-zero heatmap, since nothing pasted is a sign (v3a.1). Draws exactly what make_scene draws, so a
+    patch of the sign crop's size gets that sign's geometry. Raises as make_scene does."""
+    scene = make_scene(patch, bg, rng, cfg)
+    heatmap = np.zeros((cfg.heatmap_size, cfg.heatmap_size), np.float32)
+    return Scene(image=scene.image, box=(0, 0, 0, 0), heatmap=heatmap)
+
+
 def _canvas(bg: Image.Image, rng: np.random.Generator, cfg: SynthConfig) -> Image.Image:
     """First half of every scene's background pipeline: a random square crop of bg, resized to the scene."""
     s = cfg.scene_size

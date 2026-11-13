@@ -14,6 +14,218 @@ File contents and commit dates are unchanged, and every hash cited here was upda
 
 ---
 
+## v3a.1: decoys as training negatives — pre-registered 2026-11-12
+
+### Why
+
+v3a scores pasted things higher than real ones. A background patch pasted where a sign would go sets
+off a false alarm 9–19% of the time. A real sign's median presence is 0.11–0.12 below its pasted twin.
+Every pasted thing in training was a sign, so the paste edge may have become evidence of a sign.
+v3a.1 trains on pasted non-signs (decoys) to test that. Full spec:
+[docs/v3a1-spec.md](docs/v3a1-spec.md) (draft 2, approved).
+
+Decoys can teach that an edge is not *enough* for "sign" (D2). They cannot teach that an edge is not
+*needed*, because every training sign still has one. D1 tests "needed". So a D2 pass with a D1 fail
+points to a seamless paste or real-sign training next, not to a different cause.
+
+### Setup (fixed before any code was written)
+
+- **v3a.1 training:** v3a's config, with the 4,000 empty slots of each epoch replaced by 4,000 decoys.
+  - Decoy i is sign scene i with the sign's pixels replaced by a same-size patch from another train
+    background, through the training paste.
+  - Its target is the same as an empty's: all-zero heatmap, no class.
+  - The patch comes from its own RNG stream, and only from backgrounds big enough to cut it.
+  - Seeds 0, 1 and 2.
+- **Baseline:** v3a, not retrained: `peak_empty-20261109-140021`, `peak_empty_s1-20261109-144931` and
+  `peak_empty_s2-20261109-153419`. v1.5b is reported alongside.
+- **τ, splits and intervals:** unchanged from v3a.
+- **Seam effect:** the median presence difference, hybrid minus real, over the 645 real_dev signs. Its
+  interval comes from the photo-clustered bootstrap. Hybrids are smaller than their real twins (median
+  32 vs 40 px), and the gap grows as the hybrid gets smaller (v3a s0: 0.057 / 0.088 / 0.158). So the
+  seam report also gives:
+  - the gap per relative-size group;
+  - the share of pairs where the hybrid scores higher;
+  - median real and median hybrid presence separately.
+- **Grading:** every prediction is graded on v3a.1 seed 0 against v3a seed 0 unless its row says
+  otherwise. Test is scored once per seed, after the dev analysis is committed.
+
+### Predictions (frozen before any code; copied from spec §2.5)
+
+| # | Prediction | Measured on |
+|---|---|---|
+| D1 | The seam effect shrinks, because real signs rise. Seed 0's median presence gap (hybrid − real) is ≤ 0.06 (v3a: 0.119), all three seeds are below v3a's lowest (0.113), and seed 0's median real presence is above v3a's (0.755). Guess: gap 0.05 | real_dev vs hybrid_dev |
+| D2 | Decoy rejection carries over to the unseen plain edge: val_decoy_plain false alarms at τ ≤ 3% (v3a: 9.0%). val_decoy_aug is reported, not graded | val decoys |
+| D3 | More real signs found at τ: the 3-seed mean real_dev found is ≥ 95% (v3a: 92.8%) | real_dev, seeds 0–2 |
+| D4 | Real separation is unchanged: the paired 95% interval of ΔAUROC (v3a.1 − v3a) lies inside ±0.003 | real_dev |
+| D5 | No cost on the one-sign task: seed 0 test joint ≥ 97.28% and 3-seed mean ≥ 97.09% (the P3 bars) | test, seeds 0–2 |
+
+Reported but not graded:
+- the full seam report;
+- found at a 1% real_dev false-alarm point (v3a s0: 94.7%);
+- found per native-size bucket;
+- val_decoy_aug false alarms;
+- real_test.
+
+### Dev results (written before test or real_test was scored)
+
+Runs: `peak_decoy-20261112-011953`, `peak_decoy_s1-20261112-021910` and `peak_decoy_s2-20261112-030852`.
+The best checkpoints by val joint came from epochs 18, 19 and 18. All three trained without error, about
+50 minutes each.
+
+Seed 0 against v3a seed 0. Brackets are 95% intervals: Wilson or two-sample bootstrap on synthetic
+splits, photo-clustered bootstrap on real ones.
+
+| | v3a seed 0 | v3a.1 seed 0 |
+|---|---|---|
+| τ (1% of val empties) | 0.566 | 0.484 |
+| val AUROC, signs vs empties | 0.9991 | 0.9993 [0.9987, 0.9996] |
+| val found at τ | 98.46% | 98.04% [97.62, 98.39] |
+| val joint (τ ignored) | 98.62% | 98.22% [97.81, 98.55] |
+| **val decoy FA, plain paste (D2)** | 8.98% | **1.68% [1.36, 2.08]** |
+| val decoy FA, training paste | 11.54% | 2.22% [1.85, 2.67] |
+| real_dev AUROC | 0.9967 | 0.9973 [0.9951, 0.9989] |
+| real_dev FA at τ | 6/1200 = 0.50% | 9/1200 = 0.75% [0.33, 1.25] |
+| real_dev found at τ | 90.08% | 94.42% [92.68, 96.13] |
+| real_dev found at the threshold giving 1% FA on real negatives | 94.73% | 96.43% |
+| real_dev joint (τ ignored) | 98.14% | 97.98% |
+| said yes: real sign vs its hybrid twin (of 645) | 588 vs 643, gap 8.5 pts | 619 vs 643, gap 3.7 pts, McNemar p = 8e-7 |
+
+**Seam report** (`scripts/seam_report.py`): median presence, hybrid minus real, over the same 645 pairs.
+
+| | v3a s0 | v3a.1 s0 | v3a.1 s1 | v3a.1 s2 |
+|---|---|---|---|---|
+| **all pairs (D1)** | 0.119 [0.109, 0.127] | **0.123 [0.112, 0.132]** | 0.103 [0.090, 0.117] | 0.110 [0.099, 0.120] |
+| hybrid larger (148) | 0.057 | 0.051 | 0.033 | 0.036 |
+| similar size (139) | 0.088 | 0.093 [0.076, 0.111] | 0.075 | 0.087 |
+| hybrid smaller (358) | 0.158 | 0.154 | 0.144 | 0.150 |
+| share of pairs where the hybrid scores higher | 0.881 | 0.891 | 0.848 | 0.857 |
+| median real presence | 0.755 | 0.752 | 0.778 | 0.757 |
+| median hybrid presence | 0.874 | 0.878 | 0.880 | 0.867 |
+
+v3a seeds 1 and 2 had gaps of 0.113 and 0.123, with median real presence 0.762 and 0.747.
+
+**Paired AUROC difference**, v3a.1 minus v3a on the same scenes (`scripts/compare_presence.py`):
+
+| Seed | real_dev ΔAUROC (D4) | val ΔAUROC | real_dev ΔAUROC vs v1.5b |
+|---|---|---|---|
+| 0 | +0.0006 [−0.0002, +0.0015] | +0.0001 [−0.0002, +0.0005] | +0.0009 [−0.0009, +0.0029] |
+| 1 | +0.0015 [−0.0003, +0.0033] | +0.0005 [−0.0001, +0.0011] | +0.0009 [−0.0002, +0.0021] |
+| 2 | +0.0011 [+0.0001, +0.0022] | −0.0004 [−0.0008, −0.0001] | +0.0024 [+0.0008, +0.0042] |
+
+**All three seeds**:
+
+| Seed | τ | val decoy FA plain / training paste | real_dev FA | real_dev found | found at 1% real FA | found small / medium / large |
+|---|---|---|---|---|---|---|
+| v3a.1 s0 | 0.484 | 1.68% / 2.22% | 0.75% | 94.42% | 96.43% | 85.7 / 96.1 / 94.2% |
+| v3a.1 s1 | 0.562 | 1.44% / 1.70% | 0.25% | 92.87% | 96.74% | 88.9 / 96.1 / 88.9% |
+| v3a.1 s2 | 0.529 | 1.76% / 2.22% | 0.33% | 94.11% | 96.74% | 85.7 / 96.6 / 92.5% |
+| v3a s0 | 0.566 | 8.98% / 11.54% | 0.50% | 90.08% | 94.73% | 87.3 / 94.9 / 83.2% |
+| v3a s1 | 0.518 | 12.20% / 16.02% | 0.58% | 92.87% | 95.35% | 87.3 / 95.5 / 90.3% |
+| v3a s2 | 0.343 | 18.86% / 24.66% | 0.67% | 95.50% | 96.12% | 88.9 / 96.6 / 95.6% |
+
+The native-size buckets hold 63 small, 356 medium and 226 large signs.
+
+Three-seed means, v3a → v3a.1:
+- τ: 0.476 → 0.525
+- real_dev AUROC: 0.9970 → 0.9981
+- real_dev FA: 0.58% → 0.44%
+- real_dev found: 92.82% → 93.80%
+- plain-decoy FA: 13.3% → 1.6%
+- median presence gap: 0.118 → 0.112
+- said-yes gap: 5.6 → 4.5 points
+- val joint: 98.41% → 98.30%
+
+### Predictions vs outcome (dev)
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| D1 | Seed 0 gap ≤ 0.06, all seeds < 0.113, seed 0 median real presence above 0.755 | Seed 0 gap 0.123 (interval 0.112–0.132); seeds 0.123 / 0.103 / 0.110; median real presence 0.752 | ✗ |
+| D2 | val_decoy_plain FA ≤ 3% | 1.68% [1.36, 2.08]; seeds 1 and 2: 1.44%, 1.76% | ✓ |
+| D3 | 3-seed mean real_dev found ≥ 95% | 93.80% (v3a 92.82%) | ✗ |
+| D4 | ΔAUROC interval inside ±0.003 | [−0.0002, +0.0015] | ✓ |
+| D5 | test joint | scored after this commit | — |
+
+### What it means (dev)
+
+**Decoys did what they can do.** Plain-decoy false alarms fell about fivefold, from 9.0% to 1.7%. This
+happened in all three seeds (1.4–1.8%, against v3a's 9–19%), and for the plain paste, which no
+training scene uses. After v3a.1, an edge with COCO texture inside it is no longer read as a sign.
+
+**The real-vs-hybrid gap did not move.**
+- The median gap is 0.123 for seed 0 against v3a's 0.119, and the seed range (0.103–0.123) overlaps
+  v3a's (0.113–0.123).
+- Real signs barely rose: median real presence is 0.75–0.78 across v3a.1 seeds, against 0.75–0.76 for v3a.
+- The gap is unchanged within each size group too, including size-matched pairs (0.093 vs 0.088).
+
+So the size confound doesn't hide a fix: there is no fix to hide.
+
+**Reading the D1/D2 pattern**, as the spec set out before the data (§1):
+- A D2 pass with a D1 fail means the paste edge is no longer *enough* for "sign".
+- It does not say what the remaining gap is made of. Two explanations fit these numbers equally well:
+  1. The model needs the edge *and* sign content, as §1 warned. Decoys cannot remove that, because
+     every training sign still has an edge.
+  2. The gap was never mainly about the edge. A hybrid also differs from its real twin in finishing
+     (brightness change, blur, noise) and in surroundings (COCO vs a road scene).
+- v3a.1 cannot tell these apart. A seamless paste, or hybrids made without the finishing step, would
+  test them.
+
+**The said-yes gap at τ shrank (8.5 → 3.7 points for seed 0), but that is τ moving, not the cue.**
+- v3a.1 seed 0's τ is lower (0.484 vs 0.566), so more real signs clear it.
+- The median presence gap, which does not depend on τ, did not change.
+- That is why the spec made the τ-free measure primary.
+
+**No cost elsewhere on dev.**
+- Real separation is a little better in every seed. ΔAUROC is +0.0006 to +0.0015, and the seed 2
+  interval excludes 0.
+- Found at a matched 1% real false-alarm rate rose in every seed: 96.4–96.7% against v3a's 94.7–96.1%.
+- Real false alarms at τ stayed under 1%.
+- val joint fell slightly (98.41% → 98.30% on the 3-seed mean); D5 grades the test equivalent.
+
+**D3 missed its bar but moved the right way.** The 3-seed mean found is 93.80% against v3a's 92.82%.
+The seeds are also closer together: τ ranges 0.48–0.56, against v3a's 0.34–0.57. A reason may be that
+val decoys no longer decide where empties and signs separate, but I have not checked that.
+
+### Not covered (dev)
+
+- Which of the two explanations above holds. Both need a new kind of hybrid, which is outside v3a.1.
+- Decoy content is COCO texture in both training and val. D2 shows the edge style carries over, not
+  that the model now reads sign content (spec §2.1).
+- One training recipe and one decoy share (all 4,000 slots); no mix of empties and decoys.
+
+### Test (each split scored once per seed, after the dev analysis above was committed)
+
+| v3a.1 seed | τ | test AUROC | test FA at τ | test found | **test joint** | real_test AUROC | real_test FA | real_test found | real said yes vs hybrid |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.484 | 0.9982 [0.9974, 0.9989] | 0.70% (35/5000) [0.50, 0.97] | 96.46% | **97.30%** [96.81, 97.71] | 0.9976 [0.9942, 0.9999] | 3/600 | 96.19% [93.91, 98.25] | 97.6% vs 99.7% (p = 0.03) |
+| 1 | 0.562 | 0.9983 | 0.66% (33/5000) | 96.48% | **97.68%** | 0.9972 | 2/600 | 95.16% | 95.2% vs 100.0% (p = 1e-4) |
+| 2 | 0.529 | 0.9982 | 0.66% (33/5000) | 96.50% | **97.34%** | 0.9981 | 3/600 | 94.81% | 96.2% vs 99.7% (p = 0.006) |
+
+3-seed mean test joint: **97.44%** (v3a: 97.67%).
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| D5 | seed 0 test joint ≥ 97.28%, 3-seed mean ≥ 97.09% | 97.30% and 97.44% | ✓ |
+
+**Final tally: 3 of 5** (D2, D4, D5). The three that held say that decoys teach the model to reject a
+pasted edge, and that this costs nothing measurable. The two that failed (D1, D3) are the ones that
+expected real signs to benefit.
+
+- **D5 passed narrowly.** Seed 0 cleared its bar by 0.02 points, and its interval (96.81–97.71) spans
+  the bar. The 3-seed mean cleared it by 0.35.
+- **Synthetic joint is a little lower than v3a's**: 97.44% against 97.67% on the 3-seed mean, with two
+  seeds lower and one higher. On dev, val joint also fell (98.30% against 98.41%). These are separate
+  runs, not paired, so I cannot say whether the difference is real. If it is, it is a small cost.
+- **Test false alarms at τ fell**: 0.67% against v3a's 1.09% on the 3-seed mean. The synthetic τ still
+  carries over to test.
+- **Real test repeats dev.**
+  - Real found is the same in both models: 95.39% on the 3-seed mean.
+  - Real FA at τ is 2–3 per 600, against v3a's 2–7.
+  - The median presence gap, hybrid minus real, is 0.101–0.110, against v3a's 0.114–0.117. That is on
+    289 pairs with no interval and was not predicted, so I don't read it as a fix.
+  - Real signs still get "yes" less often than their hybrid twins, by 2–5 points.
+
+---
+
 ## v3a: saying "no sign here" — pre-registered 2026-11-09
 
 ### Why

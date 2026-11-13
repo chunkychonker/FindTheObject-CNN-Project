@@ -8,7 +8,11 @@ from findobject.data.fresh import FreshScenes
 from findobject.data.gtsrb import track_id
 from findobject.data.sign_augment import SignAugment
 from findobject.data.splits import split_sources
-from findobject.training.train_data import TrainScenes, epoch_datasets
+from PIL import Image
+
+from findobject.data.gtsrb import SignSample
+from findobject.data.splits import SceneSource
+from findobject.training.train_data import TrainScenes, decoy_sources, epoch_datasets
 
 SYNTH = {"scene_size": 128, "heatmap_size": 32, "sign_min": 16, "sign_max": 48, "brightness": [0.6, 1.4],
          "blur_prob": 0.5, "blur_max_radius": 1.0, "noise_max_std": 8.0, "heatmap_sigma": 1.0}
@@ -79,6 +83,39 @@ def test_bad_n_train_empty_rejected_before_reading_any_data(n_empty):
     cfg = {**REAL, "raw_dir": "/nonexistent", "train_scenes": "fresh", "n_train_empty": n_empty}
     with pytest.raises(ValueError, match="n_train_empty"):
         epoch_datasets(cfg, seed=0)
+
+
+def test_decoys_with_fixed_scenes_rejected(tmp_path):
+    with pytest.raises(ValueError, match="n_train_decoy"):
+        epoch_datasets({**_tiny_train_npz(tmp_path), "n_train_decoy": 1}, seed=0)
+
+
+@pytest.mark.parametrize("n_empty,n_decoy", [(0, -1), (0, 1.5), (0, True), (0, "100"), (0, 20000), (4000, 16000)])
+def test_bad_n_train_decoy_rejected_before_reading_any_data(n_empty, n_decoy):
+    cfg = {**REAL, "raw_dir": "/nonexistent", "train_scenes": "fresh", "n_train_empty": n_empty, "n_train_decoy": n_decoy}
+    with pytest.raises(ValueError, match="n_train_decoy"):
+        epoch_datasets(cfg, seed=0)
+
+
+def test_decoy_sources_reads_sizes_and_drops_small_backgrounds(tmp_path):
+    bgs = []
+    for k, size in enumerate([(300, 300), (40, 300), (300, 300), (300, 40)]):  # (w, h); 1 too narrow, 3 too short
+        bgs.append(tmp_path / f"bg{k}.png")
+        Image.new("RGB", size).save(bgs[-1])
+    signs = [SignSample(path=tmp_path / "s.png", roi=(0, 0, 49, 9), class_id=0),  # 50x10
+             SignSample(path=tmp_path / "s.png", roi=(5, 5, 14, 54), class_id=1)]  # 10x50
+    d = decoy_sources(SceneSource(signs, bgs))
+    assert d.need == (50, 50) and d.index == (0, 2)
+    with pytest.raises(ValueError):
+        decoy_sources(SceneSource(signs, bgs[:2]))
+
+
+@needs_raw
+def test_fresh_with_decoys_keeps_the_epoch_length():
+    for_epoch = epoch_datasets({**REAL, "train_scenes": "fresh", "train_augment": AUG, "n_train_decoy": 4000}, seed=0)
+    e1 = for_epoch(1)
+    assert len(e1) == 20000 and e1[15999].class_id.item() != -100 and e1[16000].class_id.item() == -100
+    assert e1[19999].class_id.item() == -100
 
 
 @needs_raw
