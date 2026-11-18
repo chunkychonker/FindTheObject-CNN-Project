@@ -209,6 +209,37 @@ group, at 89.4%.
 - AP_point and FPPI use GTSDB's labels, which omit every sign outside the 43 classes.
 - Seconds per photo were measured on MPS with nothing else controlled. They are a rough guide.
 
+### Test (photos 600–899 scored once per seed, after the dev analysis above was committed)
+
+Thresholds come from each seed's dev file, unchanged. Grade:
+[results/v3b/grades_test.json](results/v3b/grades_test.json). A second `--split test` run on seed 0 was
+tried afterwards and refused with exit code 2.
+
+| Seed | test found at τ_W (of 361) | test FPPI at τ_W | dev found at τ_W | found at τ_syn | AP_point | stacked / isolated found |
+|---|---|---|---|---|---|---|
+| 0 | 98.61% (356) [97.2, 99.7] | 0.617 (185) [0.513, 0.713] | 97.06% | 98.61% | 0.944 | 83/85, 273/276 |
+| 1 | 99.17% (358) | 0.473 (142) | 96.71% | 98.06% | 0.956 | 85/85, 273/276 |
+| 2 | 97.78% (353) | 0.487 (146) | 95.65% | 97.23% | 0.940 | 84/85, 269/276 |
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| W6 | 3-seed mean test FPPI ≤ 0.75, and mean test found ≥ mean dev found − 5 points (≥ 91.47%) | FPPI 0.526; found 98.52% (dev 96.47%) | ✓ |
+
+**Final tally: 4 of 6** (W1, W3, W5, W6).
+- The two that failed were the ones that expected trouble: a stacked-sign gap (W2) and a false-positive
+  rate near the window estimate (W4).
+- Whole photos turned out easier than predicted on every count.
+
+**Test is a little easier than dev.**
+- Found is 1.5–2.5 points higher in every seed.
+- Test holds fewer small signs (27 of 361, 7.5%, against dev's 85 of 851, 10.0%), the weakest group on dev.
+- The dev τ_W mostly carries over. Seeds 1 and 2 land at 0.47 and 0.49. Seed 0 is high at 0.62, and its
+  interval (0.513–0.713) just excludes 0.5: at its τ_W, that seed fires more on test than on dev.
+
+**Seed 2's stacked weakness does not repeat on test.** It finds 84 of 85 stacked signs, and 57 of 57 in
+the medium bucket. Test has 85 stacked signs against dev's 234, so this neither confirms nor overturns
+the dev gap. The dev reading stands: stacked signs cost seed 0 nothing, and the seeds differ.
+
 ---
 
 ## v3a.1: decoys as training negatives — pre-registered 2026-11-12
