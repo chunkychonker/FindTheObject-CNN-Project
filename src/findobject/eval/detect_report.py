@@ -109,7 +109,8 @@ def detect_report(photos: Sequence[PhotoRecord], thresholds: dict[str, float],
 
     `windowed` maps (photo index, gt_index) to the windowed found outcome; pass {} where there is none.
     An interval is None when some resample draws no sign of its group (possible only for groups in very
-    few photos); graders must refuse a None they need. Empty groups are left out.
+    few photos); graders must refuse a None they need. Empty groups are left out, and a difference
+    involving an empty group has value and ci None.
     Raises ValueError for no photos, no signs, or a windowed key that names no sign.
     """
     if not photos:
@@ -150,6 +151,8 @@ def detect_report(photos: Sequence[PhotoRecord], thresholds: dict[str, float],
             out_groups[g] = entry
 
         def diff(a: str, b: str) -> dict:
+            if not (groups[a].any() and groups[b].any()):  # undefined, not NaN: JSON has no NaN
+                return {"value": None, "ci": None}
             fa, na = _per_photo(found & groups[a], signs.photo, n_photos), _per_photo(groups[a], signs.photo, n_photos)
             fb, nb = _per_photo(found & groups[b], signs.photo, n_photos), _per_photo(groups[b], signs.photo, n_photos)
             stat = lambda idx: fa[idx].sum() / na[idx].sum() - fb[idx].sum() / nb[idx].sum()

@@ -1,5 +1,6 @@
 """detect_report on hand-made photos (docs/v3b-spec.md A13)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -140,3 +141,14 @@ def test_detect_report_rejects_bad_input():
         detect_report([], {TAU_SYN: 0.5}, {}, 0, N)
     with pytest.raises(ValueError, match="windowed keys"):
         detect_report(_hand_set(), {TAU_SYN: 0.5}, {(9, 0): True}, 0, N)
+
+
+def test_a_difference_with_an_empty_group_is_none_and_the_report_is_strict_json():
+    # No stacked sign anywhere: isolated - stacked is undefined, so it must be None, not NaN (json.dumps
+    # would write a bare NaN, which strict JSON parsers reject).
+    photos = [_record(0, [((300, 300, 340, 340), 3)], [_det(320, 320, 0.8, 3)]),
+              _record(1, [((100, 100, 130, 130), 1)], [_det(400, 400, 0.6, 1)])]
+    r = detect_report(photos, {TAU_SYN: 0.5}, {}, rng_seed=0, n_resamples=N)
+    for name in ("isolated_minus_stacked", "medium_isolated_minus_stacked"):
+        assert r["at"][TAU_SYN]["differences"][name] == {"value": None, "ci": None}
+    json.dumps(r, allow_nan=False)
