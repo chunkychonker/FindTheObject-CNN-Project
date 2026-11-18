@@ -5,8 +5,8 @@ Usage:
 
 Reads outputs/eval/<run>/detect_dev.json. Writes:
   results/v3b/fp_sheet.png          the sheet, committed: numbered crops, no scores
-  results/v3b/fp_audit.csv          number,label with empty labels, to fill in by hand with one of
-                                    unlabeled_sign, sign_like, other
+  results/v3b/fp_audit.csv          number,label,note with empty labels, to fill in from the sheet alone
+                                    with one of LABELS (P6's four, docs/v3a-spec.md §4 step 2)
   outputs/eval/<run>/fp_key.json    which photo, point, scale and score each number is. Don't open it
                                     before the labels are committed.
 
@@ -32,7 +32,13 @@ EVAL_ROOT = Path("outputs/eval")
 OUT_DIR = Path("results/v3b")
 GTSDB_DIR = Path("data/raw/gtsdb/FullIJCNN2013")
 FP_SEED = 0
-LABELS = ("unlabeled_sign", "sign_like", "other")
+# P6's categories, applied to the object at the marked point. When unsure between two, the later letter:
+# it removes fewer false positives, so the estimate of FPPI without unlabeled signs stays conservative.
+LABELS = {"A": "an unlabeled sign outside the 43 classes",
+          "B": "an unlabeled sign of one of the 43 classes",
+          "C": "a sign-like non-sign: round, triangular or octagonal red/blue/white object, traffic light, "
+               "vehicle lights, logo",
+          "D": "nothing sign-like"}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -60,8 +66,8 @@ def main(argv: list[str] | None = None) -> None:
 
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(["number", "label"])
-    w.writerows([[n, ""] for n in range(1, N_AUDIT + 1)])
+    w.writerow(["number", "label", "note"])
+    w.writerows([[n, "", ""] for n in range(1, N_AUDIT + 1)])
     tmp = csv_path.with_name("fp_audit.tmp.csv")
     tmp.write_text(buf.getvalue())
     tmp.replace(csv_path)
@@ -70,10 +76,10 @@ def main(argv: list[str] | None = None) -> None:
     write_json_atomic(key_path, {
         "run_id": args.run, "detect_dev": str(dev_path), "detect_dev_sha256": sha256_file(dev_path),
         "checkpoint_sha256": dev["checkpoint_sha256"], "threshold": threshold, "seed": FP_SEED,
-        "sheet_sha256": sha256_file(sheet_path), "labels": list(LABELS),
+        "sheet_sha256": sha256_file(sheet_path), "labels": LABELS,
         "tiles": [t._asdict() for t in tiles],
     })
-    print(f"wrote {sheet_path}, {csv_path} (label each number: {', '.join(LABELS)})\n"
+    print(f"wrote {sheet_path}, {csv_path} (label each number {'/'.join(LABELS)})\n"
           f"wrote {key_path} (don't open it before the labels are committed)")
 
 
