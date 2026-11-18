@@ -11,6 +11,78 @@ Raw result files (all metrics, per-class accuracy, 43×43 confusion matrix) live
 
 ---
 
+## v3b: every sign in whole photos — pre-registered 2026-11-17
+
+### Why
+
+Every result so far scores one 128×128 window that holds at most one sign. The real task is a whole GTSDB
+photo (1360×800) that may hold 0–6 signs of sizes from 17 to 129 px. v3b asks how well the v3a.1 model
+finds them with **no retraining**, and what limits it. Full spec:
+[docs/v3b-spec.md](docs/v3b-spec.md) (draft 2: the plan was approved on draft 1, and draft 2 applies a
+fresh-session review).
+
+Four things change from windows to whole photos, and none has been measured before:
+- **Several signs:** 851 dev signs in 600 photos, 68 photos with three or more.
+- **Stacked signs:** 234 dev signs have another sign close by. 206 of them were never windowed, because
+  the window cutter skipped any window with a second sign in view.
+- **No single right scale.**
+- **About 87 windows' worth of chances to fire per photo.**
+
+The stacked result decides v3c: train on scenes with several signs, or keep reading a class at every peak
+(spec §1, decision table).
+
+### Setup (fixed before any code was written)
+
+- **Models:** the three v3a.1 checkpoints, unchanged: `peak_decoy-20261112-011953` (seed 0),
+  `peak_decoy_s1-20261112-021910` and `peak_decoy_s2-20261112-030852`.
+- **Running the model:**
+  - an image pyramid at scales 1, ½ and ¼ (PIL bilinear), the model in eval mode, with no square crop;
+  - at each scale, a peak is a 3×3 local maximum of the logits with score ≥ 0.05, and its class is read
+    there through the 3×3 class window;
+  - greedy suppression across scales: drop anything strictly closer than 3 cells of the kept
+    detection's scale (Chebyshev distance), ignoring class.
+- **Ground truth:** GTSDB labels with exact duplicates removed (photo 340's row 2). Dev is photos 0–599
+  (851 signs), test is 600–899 (361 signs).
+  - Stacked means another sign's center is strictly closer than 1.5× the sign's long side, by Euclidean
+    distance.
+- **Matching:** a detection points at a sign if its point is in the half-open box.
+  - Found matching is class-aware and located matching ignores class. Both are greedy in score order.
+  - Every unmatched detection is a false positive: `background`, `duplicate` or `wrong_class`.
+- **Thresholds:**
+  - τ_syn is each seed's stored window τ (0.484 / 0.562 / 0.529);
+  - τ_W is the smallest threshold with dev FPPI ≤ 0.5, chosen from false-positive scores alone and
+    carried unchanged to test.
+- **Intervals:** photo-clustered bootstrap, 95% percentile, with presence_report's resample count and
+  seed. Differences use the same resamples.
+- **Grading:** dev first, then the dev analysis is committed, then test is scored once per seed (a new
+  test-guard family, `photos_test`). Unlabeled signs count as false positives. A hand audit estimates
+  their share, but it is not used for grading.
+
+### Predictions (frozen before any code; copied from spec §2.6)
+
+On dev photos 0–599, at each run's τ_syn, unless the row says otherwise. "Medium" is the 24–47 px bucket.
+
+| # | Prediction | Measured on |
+|---|---|---|
+| W1 | On the 645 signs in real_dev, seed 0's whole-photo found is within 3 points of windowed found (94.42%), i.e. in [91.42, 97.42]%. Guess: 93.5% | dev, the 645 windowed signs |
+| W2 | In the medium bucket, seed 0's found on the 336 isolated signs minus found on the 146 stacked is ≥ 5 points; the photo-clustered 95% interval of the difference excludes 0; and the difference is positive for all three seeds. Guess: 94% vs 83% | dev medium, seeds 0–2 |
+| W3 | On the 139 dev signs ≥ 64 px, seed 0's found with the pyramid is ≥ 85%, and at scale 1 alone ≤ 60%. Guess: 90% vs 30% | dev, signs ≥ 64 px |
+| W4 | Seed 0's dev FPPI at τ_syn is in [0.4, 1.6] (estimate 0.65 = 0.75% of real negatives × 87 window-equivalents). Guess: 0.8 | dev, 600 photos |
+| W5 | At each seed's τ_W, the 3-seed mean found on all 851 dev signs is ≥ 80%. Guess: 85% | dev, seeds 0–2 |
+| W6 | On test photos at each seed's dev τ_W, the 3-seed mean test FPPI is ≤ 0.75, and the 3-seed mean test found is ≥ the 3-seed mean dev found at τ_W minus 5 points. Guess: FPPI 0.5, found 86% | test, seeds 0–2, scored once |
+
+Reported but not graded:
+- FROC curves, found at FPPI 0.1 and 1.0, and AP_point;
+- found, located, located before suppression and class accuracy given located, per size bucket,
+  stacked/isolated and windowed/not;
+- W2 over all sizes; seed 0's found at τ_W;
+- false positives by kind and by scale;
+- the hand audit of the 40 highest-scoring seed-0 `background` false positives at τ_W;
+- W1's per-sign McNemar test against windows;
+- seconds per photo.
+
+---
+
 ## v3a.1: decoys as training negatives — pre-registered 2026-11-12
 
 ### Why

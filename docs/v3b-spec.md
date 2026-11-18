@@ -1,8 +1,8 @@
 # v3b spec: find every sign in a whole road photo
 
-Status: **draft 2, for review.** Nothing below is implemented. Draft 1 (0391cbf) was reviewed by a fresh
-session, and §7 lists what changed. Predictions (§2.6) are frozen in RESULTS.md as the **first** step after
-approval, before any code.
+Status: **draft 2.** The plan was approved on 2026-11-17 on draft 1 (0391cbf). Draft 2 applies a
+fresh-session review of draft 1, and §7 lists what changed. The predictions (§2.6) are frozen in RESULTS.md
+before any code.
 
 ## 1. Intent
 
