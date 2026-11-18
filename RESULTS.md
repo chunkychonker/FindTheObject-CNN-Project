@@ -81,6 +81,134 @@ Reported but not graded:
 - W1's per-sign McNemar test against windows;
 - seconds per photo.
 
+### Dev results (written before test photos were scored)
+
+`scripts/detect_photos.py --split dev` per seed, `--scales 1` for seed 0, then `scripts/grade_v3b.py
+--split dev`. Grades and the per-seed numbers behind them: [results/v3b/grades_dev.json](results/v3b/grades_dev.json),
+which records the SHA-256 of every file it read. Run on MPS (torch 2.9.0).
+
+**All three seeds**, 600 dev photos, 851 signs:
+
+| Seed | τ_syn | found at τ_syn | FPPI at τ_syn | τ_W | found at τ_W | found at FPPI 0.1 / 1.0 | AP_point | s / photo |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.484 | 96.47% (821) | 0.348 (209 FP) | 0.427 | 97.06% (826) | 86.13 / 97.53% | 0.942 | 0.20 |
+| 1 | 0.562 | 95.42% (812) | 0.210 (126) | 0.404 | 96.71% (823) | 89.78 / 97.41% | 0.948 | 0.17 |
+| 2 | 0.529 | 93.42% (795) | 0.325 (195) | 0.447 | 95.65% (814) | 84.02 / 96.83% | 0.927 | 0.12 |
+| 0, scale 1 only | 0.484 | 76.38% (650) | 0.280 (168) | 0.398 | 79.32% (675) | 59.93 / 81.43% | 0.771 | 0.09 |
+
+**Seed 0 by group at τ_syn** (found; brackets are photo-clustered 95% intervals):
+
+| Group | n | found | located | located before suppression |
+|---|---|---|---|---|
+| small (< 24 px) | 85 | 89.41% | 90.59% | 90.59% |
+| medium (24–47 px) | 482 | 97.51% | 98.13% | 98.34% |
+| large (≥ 48 px) | 284 | 96.83% | 97.89% | 97.89% |
+| ≥ 64 px | 139 | 97.12% | — | — |
+| stacked / isolated | 234 / 617 | 94.87% / 97.08% | 96.15% / 97.73% | 96.58% / 97.73% |
+| medium stacked / isolated | 146 / 336 | 97.26% / 97.62% | — | — |
+| windowed / never windowed | 645 / 206 | 97.21% / 94.17% | — | — |
+
+- Class accuracy given located is 99.15%. Of seed 0's 30 misses, 23 are not located: no detection at
+  τ_syn is matched to them, even ignoring class. The other 7 are located with the wrong class.
+- Isolated minus stacked, all sizes: +2.21 points [−0.65, +5.57]. In the medium bucket (W2): +0.36
+  [−2.44, +3.59].
+- **W2 by seed** (medium isolated minus stacked): +0.36 [−2.44, +3.59], +2.80 [−0.96, +6.82],
+  **+8.97 [+3.08, +15.13]**.
+- **W1 per sign** against windows, on the same 645 signs: 20 found only whole, 2 only windowed (McNemar
+  p = 0.0001). Seeds 1 and 2: 29 vs 8 and 19 vs 9.
+- False positives at τ_W (FPPI 0.5 = 300 per seed), by kind: 293 background + 7 wrong class (seed 0),
+  288 + 11 + 1 duplicate (seed 1), 290 + 10 (seed 2). By scale for seed 0: 227 at 1, 55 at ½, 18 at ¼.
+
+### Predictions vs outcome (dev)
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| W1 | seed 0 whole-photo found on the 645 windowed signs in [91.42, 97.42]% | 97.21% (627/645); windowed 94.42% | ✓ |
+| W2 | medium isolated − stacked ≥ 5 points, interval excludes 0, positive in all seeds | +0.36 [−2.44, +3.59]; seeds +0.36 / +2.80 / +8.97 | ✗ |
+| W3 | ≥ 64 px: pyramid ≥ 85%, scale 1 alone ≤ 60% | 97.12% vs 1.44% (135 vs 2 of 139) | ✓ |
+| W4 | seed 0 FPPI at τ_syn in [0.4, 1.6] | 0.348 [0.288, 0.413] (below the band) | ✗ |
+| W5 | 3-seed mean found at τ_W ≥ 80% | 96.47% (97.06 / 96.71 / 95.65) | ✓ |
+| W6 | test | scored after this commit | — |
+
+### Hand audit of false positives (reported, not graded)
+
+Seed 0's 40 highest-scoring dev `background` false positives at τ_W (scores 0.751–0.896; τ_W is 0.427).
+Each was labeled from its crop alone ([results/v3b/fp_sheet.png](results/v3b/fp_sheet.png), no score,
+class or photo shown), by Claude, with P6's four categories and P6's rule that when unsure between two,
+the later letter wins. Labels and a note per tile: [results/v3b/fp_audit.csv](results/v3b/fp_audit.csv),
+committed before the key that names each tile's photo and score was opened.
+
+| | Category | Count |
+|---|---|---|
+| A | unlabeled sign outside the 43 classes (blue parking P, crossing squares, motorway, no-parking discs, a chevron board) | 21 |
+| B | unlabeled sign of one of the 43 classes | 2 |
+| C | sign-like non-sign (traffic lights, a tail light, shop and information boards, a truck's 80 plate) | 11 |
+| D | nothing sign-like | 6 |
+
+- 23 of 40 (57.5%, Wilson [42.2, 71.5]) are signs GTSDB doesn't label. Only 2 (5%) are signs the task
+  asks for, i.e. label omissions.
+- After the key was opened, each point was checked against the photo's labeled boxes. 5 lie within
+  40 px of one. In 4 of them the crop shows the labeled sign as a separate object beside the point, as
+  the tile notes say. The fifth (#22, D) is 13 px outside a keep-right box. That sign was found by
+  another detection, and this one is a second peak with class 4 at probability 0.35. None is a
+  mislocated labeled sign.
+- **FPPI without unlabeled signs** (seed 0, τ_W, measured 0.500):
+  - removing only the 23 audited signs: (300 − 23) / 600 = **0.462**, a hard upper bound;
+  - if the top 40's sign share held over all 293 background false positives: (300 − 0.575 × 293) / 600
+    = **0.219**, between 0.151 and 0.294 across the Wilson interval.
+  - Removing only the label omissions (B) gives 0.497, or 0.476 extrapolated.
+- The extrapolation probably overstates the drop. The sign share falls with rank (7, 6, 5, 5 per ten),
+  and the 253 unaudited false positives all score lower, from 0.427 to 0.751.
+
+### What it means (dev)
+
+**The window model carries to whole photos without retraining.**
+- At its own window τ, seed 0 finds 96.5% of the 851 dev signs at 0.35 false positives per photo. The
+  3-seed mean at FPPI 0.5 is 96.5%, against a predicted 85%.
+- On the 645 signs both settings score, whole photos find *more* than windows (627 vs 609; 20 vs 2
+  discordant). The same holds for every seed. I have not checked why. One possibility is that the
+  pyramid gives a large sign a scale closer to training size than the window's shrink to ≤ 48 px did.
+
+**The pyramid is what makes large signs work (W3).**
+- At scale 1 alone, 2 of the 139 signs ≥ 64 px are found, and only 37% of large signs.
+- Small and medium are about as good as with the pyramid (89.4% and 97.3%, against 89.4% and 97.5%).
+- Scales ½ and ¼ cost 73 of the 300 false positives at τ_W and about 0.1 s per photo.
+
+**Stacked signs: by the pre-registered table (§1), reading a class at every peak is enough for seed 0.**
+- W2 failed, and seed 0's medium stacked found is 97.3%, above the table's 85%.
+- Before suppression, stacked signs are located 96.6% against 96.2% after, so suppression deletes
+  almost nothing.
+- **But seed 2 disagrees**: its medium gap is +9.0 points [+3.1, +15.1]. Stacked located is 87.2% (all
+  sizes), against 88.0% before suppression, so the loss is in the model, not in suppression.
+- Seed 1 lies between (+2.8). The table was keyed to seed 0, and the decision follows it. Still, "no
+  multi-sign training needed" holds for one training run and not for all three. A seed-dependent gap
+  this size is a result, not noise to ignore.
+
+**W4 was too pessimistic.**
+- The estimate (0.75% of real negatives × 87 window-equivalents = 0.65) treated every window-equivalent
+  as an independent chance to fire. FPPI at τ_syn is 0.21–0.35 across seeds.
+- Neighboring cells share most of their input, and 3×3 peaks plus suppression merge them, so 87 is an
+  overcount. I didn't measure the right number.
+
+**FPPI is a pessimistic count of real errors.**
+- More than half of the top false positives are real signs outside the 43 classes.
+- To the task as defined they are still errors: the model gave each one a class among the 43. But they
+  are errors of a different kind from firing on a wall. The count of label omissions is small (2 of 40).
+
+**Errors are mostly misses, not wrong classes.** Given a located sign, the class is right 99.2% of the
+time. Of seed 0's misses, 23 of 30 are not located at all. Small signs (< 24 px) are the weakest
+group, at 89.4%.
+
+### Not covered (dev)
+
+- Why whole photos beat windows on the same signs (W1's discordant pairs).
+- Why seed 2 handles stacked signs worse. One checkpoint per seed, no repeat runs.
+- The hand audit covers the top 40 of one seed's 293 background false positives, labeled by one rater
+  (Claude) from crops alone. The FPPI-without-unlabeled-signs figures are a bound and an extrapolation,
+  not a measurement.
+- AP_point and FPPI use GTSDB's labels, which omit every sign outside the 43 classes.
+- Seconds per photo were measured on MPS with nothing else controlled. They are a rough guide.
+
 ---
 
 ## v3a.1: decoys as training negatives — pre-registered 2026-11-12
