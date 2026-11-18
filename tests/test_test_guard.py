@@ -60,3 +60,13 @@ def test_evaluate_force_overrides_and_val_is_never_guarded(tmp_path):
     cli.refuse_test_rerun(tmp_path / "best_test.json", "test", force=True)  # must not raise
     (tmp_path / "presence_val.json").write_text("{}")
     cli.refuse_test_rerun(tmp_path / "best_val.json", "val", force=False)
+
+
+def test_whole_photo_test_is_its_own_family(tmp_path):
+    (tmp_path / "detect_test.json").write_text("{}")
+    assert scored_results(tmp_path, "photos_test") == [tmp_path / "detect_test.json"]
+    assert scored_results(tmp_path, "test") == [] and scored_results(tmp_path, "real_test") == []
+    for name in TEST_FAMILY + REAL_TEST_FAMILY:  # the windowed families don't mark whole photos scored
+        (tmp_path / name).write_text("{}")
+    assert scored_results(tmp_path, "photos_test") == [tmp_path / "detect_test.json"]
+    assert scored_results(tmp_path / "x", "photos_test") == []
