@@ -57,3 +57,21 @@ def window_features(features: Tensor, cells: Tensor) -> Tensor:
     windows = F.avg_pool2d(features, PEAK_WINDOW, stride=1, padding=PEAK_WINDOW // 2, count_include_pad=False)
     # Two index tensors separated by a slice: their shared batch dim goes first -> [B, C].
     return windows[torch.arange(len(cells), device=cells.device), :, cells[:, 0], cells[:, 1]]
+
+
+def window_features_at(features: Tensor, cells: Tensor) -> Tensor:
+    """[1, C, h, w] features of one image, int64 [N, 2] (row, col) cells -> [N, C]: for each cell, the mean
+    over the PEAK_WINDOW x PEAK_WINDOW cells around it, clipped at borders exactly as window_features. Used to
+    read a class at every peak of a whole photo (docs/v3b-spec.md §2.2 step 2). Pools once, then indexes.
+    Raises ValueError if features is not [1, C, h, w], cells is not [N, 2], or a cell is out of range.
+    """
+    if features.dim() != 4 or features.shape[0] != 1:
+        raise ValueError(f"need [1, C, h, w] features, got {tuple(features.shape)}")
+    if cells.dim() != 2 or cells.shape[1] != 2:
+        raise ValueError(f"need [N, 2] cells, got {tuple(cells.shape)}")
+    h, w = features.shape[2:]
+    if len(cells) and not ((cells[:, 0] >= 0).all() and (cells[:, 0] < h).all()
+                           and (cells[:, 1] >= 0).all() and (cells[:, 1] < w).all()):
+        raise ValueError(f"cells out of range for an {h} x {w} map")
+    windows = F.avg_pool2d(features, PEAK_WINDOW, stride=1, padding=PEAK_WINDOW // 2, count_include_pad=False)
+    return windows[0, :, cells[:, 0], cells[:, 1]].T
