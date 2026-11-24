@@ -118,3 +118,23 @@ def test_checkpoint_with_unknown_arch_raises(tmp_path):
     _save(tmp_path / "x.pt", BaselineCNN(), {"model": {"arch": "resnet"}})
     with pytest.raises(ValueError):
         load_model(tmp_path / "x.pt", torch.device("cpu"))
+
+
+# --- v3b: window_features_at reads many cells of one image (docs/v3b-spec.md A2) ---
+
+def test_window_features_at_matches_window_features_at_corners_edges_and_interior():
+    from findobject.models.peak import window_features_at
+    torch.manual_seed(0)
+    features = torch.randn(1, 128, 9, 14)
+    cells = torch.tensor([[0, 0], [0, 13], [8, 0], [8, 13], [0, 6], [8, 7], [4, 0], [5, 13], [4, 6], [3, 9]])
+    one_at_a_time = torch.cat([window_features(features, c[None]) for c in cells])
+    assert torch.equal(window_features_at(features, cells), one_at_a_time)
+
+
+def test_window_features_at_rejects_bad_input():
+    from findobject.models.peak import window_features_at
+    with pytest.raises(ValueError):
+        window_features_at(torch.zeros(2, 4, 5, 5), torch.zeros(1, 2, dtype=torch.long))
+    with pytest.raises(ValueError):
+        window_features_at(torch.zeros(1, 4, 5, 5), torch.tensor([[5, 0]]))
+    assert window_features_at(torch.zeros(1, 4, 5, 5), torch.zeros(0, 2, dtype=torch.long)).shape == (0, 4)

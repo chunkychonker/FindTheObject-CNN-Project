@@ -11,7 +11,9 @@ from pathlib import Path
 # Split -> every file name (in outputs/eval/<run>/) that marks its family as scored.
 _TEST_FAMILY = ("best_test.json", "presence_test.json")
 _REAL_TEST_FAMILY = ("best_real_test.json", "best_hybrid_test.json", "presence_real_test.json")
-_FAMILY = {"test": _TEST_FAMILY, "real_test": _REAL_TEST_FAMILY, "hybrid_test": _REAL_TEST_FAMILY}
+_PHOTOS_TEST_FAMILY = ("detect_test.json",)  # v3b: whole test photos 600-899, a new question (docs/v3b-spec.md §3)
+_FAMILY = {"test": _TEST_FAMILY, "real_test": _REAL_TEST_FAMILY, "hybrid_test": _REAL_TEST_FAMILY,
+           "photos_test": _PHOTOS_TEST_FAMILY}
 
 
 def scored_results(run_dir: Path, split: str) -> list[Path]:

@@ -14,6 +14,237 @@ File contents and commit dates are unchanged, and every hash cited here was upda
 
 ---
 
+## v3b: every sign in whole photos — pre-registered 2026-11-17
+
+### Why
+
+Every result so far scores one 128×128 window that holds at most one sign. The real task is a whole GTSDB
+photo (1360×800) that may hold 0–6 signs of sizes from 17 to 129 px. v3b asks how well the v3a.1 model
+finds them with **no retraining**, and what limits it. Full spec:
+[docs/v3b-spec.md](docs/v3b-spec.md) (draft 2: the plan was approved on draft 1, and draft 2 applies a
+fresh-session review).
+
+Four things change from windows to whole photos, and none has been measured before:
+- **Several signs:** 851 dev signs in 600 photos, 68 photos with three or more.
+- **Stacked signs:** 234 dev signs have another sign close by. 206 of them were never windowed, because
+  the window cutter skipped any window with a second sign in view.
+- **No single right scale.**
+- **About 87 windows' worth of chances to fire per photo.**
+
+The stacked result decides v3c: train on scenes with several signs, or keep reading a class at every peak
+(spec §1, decision table).
+
+### Setup (fixed before any code was written)
+
+- **Models:** the three v3a.1 checkpoints, unchanged: `peak_decoy-20261112-011953` (seed 0),
+  `peak_decoy_s1-20261112-021910` and `peak_decoy_s2-20261112-030852`.
+- **Running the model:**
+  - an image pyramid at scales 1, ½ and ¼ (PIL bilinear), the model in eval mode, with no square crop;
+  - at each scale, a peak is a 3×3 local maximum of the logits with score ≥ 0.05, and its class is read
+    there through the 3×3 class window;
+  - greedy suppression across scales: drop anything strictly closer than 3 cells of the kept
+    detection's scale (Chebyshev distance), ignoring class.
+- **Ground truth:** GTSDB labels with exact duplicates removed (photo 340's row 2). Dev is photos 0–599
+  (851 signs), test is 600–899 (361 signs).
+  - Stacked means another sign's center is strictly closer than 1.5× the sign's long side, by Euclidean
+    distance.
+- **Matching:** a detection points at a sign if its point is in the half-open box.
+  - Found matching is class-aware and located matching ignores class. Both are greedy in score order.
+  - Every unmatched detection is a false positive: `background`, `duplicate` or `wrong_class`.
+- **Thresholds:**
+  - τ_syn is each seed's stored window τ (0.484 / 0.562 / 0.529);
+  - τ_W is the smallest threshold with dev FPPI ≤ 0.5, chosen from false-positive scores alone and
+    carried unchanged to test.
+- **Intervals:** photo-clustered bootstrap, 95% percentile, with presence_report's resample count and
+  seed. Differences use the same resamples.
+- **Grading:** dev first, then the dev analysis is committed, then test is scored once per seed (a new
+  test-guard family, `photos_test`). Unlabeled signs count as false positives. A hand audit estimates
+  their share, but it is not used for grading.
+
+### Predictions (frozen before any code; copied from spec §2.6)
+
+On dev photos 0–599, at each run's τ_syn, unless the row says otherwise. "Medium" is the 24–47 px bucket.
+
+| # | Prediction | Measured on |
+|---|---|---|
+| W1 | On the 645 signs in real_dev, seed 0's whole-photo found is within 3 points of windowed found (94.42%), i.e. in [91.42, 97.42]%. Guess: 93.5% | dev, the 645 windowed signs |
+| W2 | In the medium bucket, seed 0's found on the 336 isolated signs minus found on the 146 stacked is ≥ 5 points; the photo-clustered 95% interval of the difference excludes 0; and the difference is positive for all three seeds. Guess: 94% vs 83% | dev medium, seeds 0–2 |
+| W3 | On the 139 dev signs ≥ 64 px, seed 0's found with the pyramid is ≥ 85%, and at scale 1 alone ≤ 60%. Guess: 90% vs 30% | dev, signs ≥ 64 px |
+| W4 | Seed 0's dev FPPI at τ_syn is in [0.4, 1.6] (estimate 0.65 = 0.75% of real negatives × 87 window-equivalents). Guess: 0.8 | dev, 600 photos |
+| W5 | At each seed's τ_W, the 3-seed mean found on all 851 dev signs is ≥ 80%. Guess: 85% | dev, seeds 0–2 |
+| W6 | On test photos at each seed's dev τ_W, the 3-seed mean test FPPI is ≤ 0.75, and the 3-seed mean test found is ≥ the 3-seed mean dev found at τ_W minus 5 points. Guess: FPPI 0.5, found 86% | test, seeds 0–2, scored once |
+
+Reported but not graded:
+- FROC curves, found at FPPI 0.1 and 1.0, and AP_point;
+- found, located, located before suppression and class accuracy given located, per size bucket,
+  stacked/isolated and windowed/not;
+- W2 over all sizes; seed 0's found at τ_W;
+- false positives by kind and by scale;
+- the hand audit of the 40 highest-scoring seed-0 `background` false positives at τ_W;
+- W1's per-sign McNemar test against windows;
+- seconds per photo.
+
+### Dev results (written before test photos were scored)
+
+`scripts/detect_photos.py --split dev` per seed, `--scales 1` for seed 0, then `scripts/grade_v3b.py
+--split dev`. Grades and the per-seed numbers behind them: [results/v3b/grades_dev.json](results/v3b/grades_dev.json),
+which records the SHA-256 of every file it read. Run on MPS (torch 2.9.0).
+
+**All three seeds**, 600 dev photos, 851 signs:
+
+| Seed | τ_syn | found at τ_syn | FPPI at τ_syn | τ_W | found at τ_W | found at FPPI 0.1 / 1.0 | AP_point | s / photo |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.484 | 96.47% (821) | 0.348 (209 FP) | 0.427 | 97.06% (826) | 86.13 / 97.53% | 0.942 | 0.20 |
+| 1 | 0.562 | 95.42% (812) | 0.210 (126) | 0.404 | 96.71% (823) | 89.78 / 97.41% | 0.948 | 0.17 |
+| 2 | 0.529 | 93.42% (795) | 0.325 (195) | 0.447 | 95.65% (814) | 84.02 / 96.83% | 0.927 | 0.12 |
+| 0, scale 1 only | 0.484 | 76.38% (650) | 0.280 (168) | 0.398 | 79.32% (675) | 59.93 / 81.43% | 0.771 | 0.09 |
+
+**Seed 0 by group at τ_syn** (found; brackets are photo-clustered 95% intervals):
+
+| Group | n | found | located | located before suppression |
+|---|---|---|---|---|
+| small (< 24 px) | 85 | 89.41% | 90.59% | 90.59% |
+| medium (24–47 px) | 482 | 97.51% | 98.13% | 98.34% |
+| large (≥ 48 px) | 284 | 96.83% | 97.89% | 97.89% |
+| ≥ 64 px | 139 | 97.12% | — | — |
+| stacked / isolated | 234 / 617 | 94.87% / 97.08% | 96.15% / 97.73% | 96.58% / 97.73% |
+| medium stacked / isolated | 146 / 336 | 97.26% / 97.62% | — | — |
+| windowed / never windowed | 645 / 206 | 97.21% / 94.17% | — | — |
+
+- Class accuracy given located is 99.15%. Of seed 0's 30 misses, 23 are not located: no detection at
+  τ_syn is matched to them, even ignoring class. The other 7 are located with the wrong class.
+- Isolated minus stacked, all sizes: +2.21 points [−0.65, +5.57]. In the medium bucket (W2): +0.36
+  [−2.44, +3.59].
+- **W2 by seed** (medium isolated minus stacked): +0.36 [−2.44, +3.59], +2.80 [−0.96, +6.82],
+  **+8.97 [+3.08, +15.13]**.
+- **W1 per sign** against windows, on the same 645 signs: 20 found only whole, 2 only windowed (McNemar
+  p = 0.0001). Seeds 1 and 2: 29 vs 8 and 19 vs 9.
+- False positives at τ_W (FPPI 0.5 = 300 per seed), by kind: 293 background + 7 wrong class (seed 0),
+  288 + 11 + 1 duplicate (seed 1), 290 + 10 (seed 2). By scale for seed 0: 227 at 1, 55 at ½, 18 at ¼.
+
+### Predictions vs outcome (dev)
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| W1 | seed 0 whole-photo found on the 645 windowed signs in [91.42, 97.42]% | 97.21% (627/645); windowed 94.42% | ✓ |
+| W2 | medium isolated − stacked ≥ 5 points, interval excludes 0, positive in all seeds | +0.36 [−2.44, +3.59]; seeds +0.36 / +2.80 / +8.97 | ✗ |
+| W3 | ≥ 64 px: pyramid ≥ 85%, scale 1 alone ≤ 60% | 97.12% vs 1.44% (135 vs 2 of 139) | ✓ |
+| W4 | seed 0 FPPI at τ_syn in [0.4, 1.6] | 0.348 [0.288, 0.413] (below the band) | ✗ |
+| W5 | 3-seed mean found at τ_W ≥ 80% | 96.47% (97.06 / 96.71 / 95.65) | ✓ |
+| W6 | test | scored after this commit | — |
+
+### Hand audit of false positives (reported, not graded)
+
+Seed 0's 40 highest-scoring dev `background` false positives at τ_W (scores 0.751–0.896; τ_W is 0.427).
+Each was labeled from its crop alone ([results/v3b/fp_sheet.png](results/v3b/fp_sheet.png), no score,
+class or photo shown), by Claude, with P6's four categories and P6's rule that when unsure between two,
+the later letter wins. Labels and a note per tile: [results/v3b/fp_audit.csv](results/v3b/fp_audit.csv),
+committed before the key that names each tile's photo and score was opened.
+
+| | Category | Count |
+|---|---|---|
+| A | unlabeled sign outside the 43 classes (blue parking P, crossing squares, motorway, no-parking discs, a chevron board) | 21 |
+| B | unlabeled sign of one of the 43 classes | 2 |
+| C | sign-like non-sign (traffic lights, a tail light, shop and information boards, a truck's 80 plate) | 11 |
+| D | nothing sign-like | 6 |
+
+- 23 of 40 (57.5%, Wilson [42.2, 71.5]) are signs GTSDB doesn't label. Only 2 (5%) are signs the task
+  asks for, i.e. label omissions.
+- After the key was opened, each point was checked against the photo's labeled boxes. 5 lie within
+  40 px of one. In 4 of them the crop shows the labeled sign as a separate object beside the point, as
+  the tile notes say. The fifth (#22, D) is 13 px outside a keep-right box. That sign was found by
+  another detection, and this one is a second peak with class 4 at probability 0.35. None is a
+  mislocated labeled sign.
+- **FPPI without unlabeled signs** (seed 0, τ_W, measured 0.500):
+  - removing only the 23 audited signs: (300 − 23) / 600 = **0.462**, a hard upper bound;
+  - if the top 40's sign share held over all 293 background false positives: (300 − 0.575 × 293) / 600
+    = **0.219**, between 0.151 and 0.294 across the Wilson interval.
+  - Removing only the label omissions (B) gives 0.497, or 0.476 extrapolated.
+- The extrapolation probably overstates the drop. The sign share falls with rank (7, 6, 5, 5 per ten),
+  and the 253 unaudited false positives all score lower, from 0.427 to 0.751.
+
+### What it means (dev)
+
+**The window model carries to whole photos without retraining.**
+- At its own window τ, seed 0 finds 96.5% of the 851 dev signs at 0.35 false positives per photo. The
+  3-seed mean at FPPI 0.5 is 96.5%, against a predicted 85%.
+- On the 645 signs both settings score, whole photos find *more* than windows (627 vs 609; 20 vs 2
+  discordant). The same holds for every seed. I have not checked why. One possibility is that the
+  pyramid gives a large sign a scale closer to training size than the window's shrink to ≤ 48 px did.
+
+**The pyramid is what makes large signs work (W3).**
+- At scale 1 alone, 2 of the 139 signs ≥ 64 px are found, and only 37% of large signs.
+- Small and medium are about as good as with the pyramid (89.4% and 97.3%, against 89.4% and 97.5%).
+- Scales ½ and ¼ cost 73 of the 300 false positives at τ_W and about 0.1 s per photo.
+
+**Stacked signs: by the pre-registered table (§1), reading a class at every peak is enough for seed 0.**
+- W2 failed, and seed 0's medium stacked found is 97.3%, above the table's 85%.
+- Before suppression, stacked signs are located 96.6% against 96.2% after, so suppression deletes
+  almost nothing.
+- **But seed 2 disagrees**: its medium gap is +9.0 points [+3.1, +15.1]. Stacked located is 87.2% (all
+  sizes), against 88.0% before suppression, so the loss is in the model, not in suppression.
+- Seed 1 lies between (+2.8). The table was keyed to seed 0, and the decision follows it. Still, "no
+  multi-sign training needed" holds for one training run and not for all three. A seed-dependent gap
+  this size is a result, not noise to ignore.
+
+**W4 was too pessimistic.**
+- The estimate (0.75% of real negatives × 87 window-equivalents = 0.65) treated every window-equivalent
+  as an independent chance to fire. FPPI at τ_syn is 0.21–0.35 across seeds.
+- Neighboring cells share most of their input, and 3×3 peaks plus suppression merge them, so 87 is an
+  overcount. I didn't measure the right number.
+
+**FPPI is a pessimistic count of real errors.**
+- More than half of the top false positives are real signs outside the 43 classes.
+- To the task as defined they are still errors: the model gave each one a class among the 43. But they
+  are errors of a different kind from firing on a wall. The count of label omissions is small (2 of 40).
+
+**Errors are mostly misses, not wrong classes.** Given a located sign, the class is right 99.2% of the
+time. Of seed 0's misses, 23 of 30 are not located at all. Small signs (< 24 px) are the weakest
+group, at 89.4%.
+
+### Not covered (dev)
+
+- Why whole photos beat windows on the same signs (W1's discordant pairs).
+- Why seed 2 handles stacked signs worse. One checkpoint per seed, no repeat runs.
+- The hand audit covers the top 40 of one seed's 293 background false positives, labeled by one rater
+  (Claude) from crops alone. The FPPI-without-unlabeled-signs figures are a bound and an extrapolation,
+  not a measurement.
+- AP_point and FPPI use GTSDB's labels, which omit every sign outside the 43 classes.
+- Seconds per photo were measured on MPS with nothing else controlled. They are a rough guide.
+
+### Test (photos 600–899 scored once per seed, after the dev analysis above was committed)
+
+Thresholds come from each seed's dev file, unchanged. Grade:
+[results/v3b/grades_test.json](results/v3b/grades_test.json). A second `--split test` run on seed 0 was
+tried afterwards and refused with exit code 2.
+
+| Seed | test found at τ_W (of 361) | test FPPI at τ_W | dev found at τ_W | found at τ_syn | AP_point | stacked / isolated found |
+|---|---|---|---|---|---|---|
+| 0 | 98.61% (356) [97.2, 99.7] | 0.617 (185) [0.513, 0.713] | 97.06% | 98.61% | 0.944 | 83/85, 273/276 |
+| 1 | 99.17% (358) | 0.473 (142) | 96.71% | 98.06% | 0.956 | 85/85, 273/276 |
+| 2 | 97.78% (353) | 0.487 (146) | 95.65% | 97.23% | 0.940 | 84/85, 269/276 |
+
+| # | Prediction | Outcome | |
+|---|---|---|---|
+| W6 | 3-seed mean test FPPI ≤ 0.75, and mean test found ≥ mean dev found − 5 points (≥ 91.47%) | FPPI 0.526; found 98.52% (dev 96.47%) | ✓ |
+
+**Final tally: 4 of 6** (W1, W3, W5, W6).
+- The two that failed were the ones that expected trouble: a stacked-sign gap (W2) and a false-positive
+  rate near the window estimate (W4).
+- Whole photos turned out easier than predicted on every count.
+
+**Test is a little easier than dev.**
+- Found is 1.5–2.5 points higher in every seed.
+- Test holds fewer small signs (27 of 361, 7.5%, against dev's 85 of 851, 10.0%), the weakest group on dev.
+- The dev τ_W mostly carries over. Seeds 1 and 2 land at 0.47 and 0.49. Seed 0 is high at 0.62, and its
+  interval (0.513–0.713) just excludes 0.5: at its τ_W, that seed fires more on test than on dev.
+
+**Seed 2's stacked weakness does not repeat on test.** It finds 84 of 85 stacked signs, and 57 of 57 in
+the medium bucket. Test has 85 stacked signs against dev's 234, so this neither confirms nor overturns
+the dev gap. The dev reading stands: stacked signs cost seed 0 nothing, and the seeds differ.
+
+---
+
 ## v3a.1: decoys as training negatives — pre-registered 2026-11-12
 
 ### Why
