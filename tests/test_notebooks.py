@@ -23,8 +23,8 @@ def _source(cell: dict) -> str:
     return "".join(cell["source"]) if isinstance(cell["source"], list) else cell["source"]
 
 
-def test_notebooks_are_numbered_00_to_08_with_no_gaps():
-    assert [p.stem[:2] for p in NOTEBOOKS] == [f"{i:02d}" for i in range(9)]
+def test_notebooks_are_numbered_00_to_09_with_no_gaps():
+    assert [p.stem[:2] for p in NOTEBOOKS] == [f"{i:02d}" for i in range(10)]
 
 
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=NB_IDS)
