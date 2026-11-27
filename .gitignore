@@ -29,3 +29,6 @@ venv/
 # logs
 runs/
 *.log
+
+# demo exports (weights stay unpublished until deploying is decided; see docs/demo-spec.md)
+/demo/assets/
