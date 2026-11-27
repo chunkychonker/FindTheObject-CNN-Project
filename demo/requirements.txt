@@ -1,0 +1,3 @@
+# Demo only (docs/demo-spec.md): the repo's pins plus Gradio, kept out of the main requirements.txt.
+-r ../requirements.txt
+gradio==6.32.0
